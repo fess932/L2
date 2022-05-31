@@ -7,12 +7,15 @@ import (
 func Test_unpack(t *testing.T) {
 
 	tcs := []struct {
-		input  string
-		output string
+		input       string
+		output      string
+		errExpected bool
 	}{
-		{"a", "a"},
-		{"a2b3c", "aabbbc"},
-		{"a2b3c4d", "aabbbccccd"},
+		{"a", "a", false},
+		{"4a", "", true},
+		{"a2b11", "aabbbbbbbbbbb", false},
+		{"a2", "aa", false},
+		{"a2b3c", "aabbbc", false},
 	}
 
 	t.Parallel()
@@ -24,10 +27,14 @@ func Test_unpack(t *testing.T) {
 			t.Parallel()
 
 			out, err := unpack(tc.input)
-			if err != nil {
-				t.Errorf("\nunpack(%s)\nerror: %v", tc.input, err)
+			if tc.errExpected {
+				if err == nil {
+					t.Errorf("expected error, got %s", out)
+				}
 
 				return
+			} else if err != nil {
+				t.Errorf("unexpected error: %s", err)
 			}
 
 			if out != tc.output {

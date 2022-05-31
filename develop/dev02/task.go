@@ -111,9 +111,17 @@ func unpack(pkd string) (string, error) {
 
 	total := ""
 	letter := ""
-	for _, l := range letters {
+
+	for i, l := range letters {
 		if !strings.Contains("1234567890", l) {
+			if letter != "" {
+				total += letter
+			}
 			letter = l
+			if i == len(letters)-1 {
+				total += letter
+			}
+
 			continue
 		}
 
@@ -123,6 +131,7 @@ func unpack(pkd string) (string, error) {
 		}
 
 		total += strings.Repeat(letter, count)
+		letter = ""
 	}
 
 	return total, nil

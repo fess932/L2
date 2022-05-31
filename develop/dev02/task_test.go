@@ -12,7 +12,9 @@ func Test_unpack(t *testing.T) {
 		errExpected bool
 	}{
 		{"a", "a", false},
+		{"abcd", "abcd", false},
 		{"4a", "", true},
+		{"", "", false},
 		{"a2b11", "aabbbbbbbbbbb", false},
 		{"a2", "aa", false},
 		{"a2b3c", "aabbbc", false},

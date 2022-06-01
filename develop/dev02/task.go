@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strconv"
@@ -26,284 +27,103 @@ func main() {
 	log.Println(unpack("a1b2"))
 }
 
-type ttype int
+var ErrInvalidString = fmt.Errorf("invalid string")
+var ErrEmptyString = fmt.Errorf("empty string")
 
-const (
-	num ttype = iota + 1
-	str
-	esc
-)
-
-type token struct { // если это число то они идут подряд
-	t     ttype
-	value string
+func isNumber(str rune) bool {
+	return strings.ContainsRune("1234567890", str)
 }
 
-func ntoken(s string) (t token) {
-	if strings.Contains("1234567890", s) {
-		t.t = num
-		return t
+func check(str []rune) error {
+	if len(str) == 0 {
+		return ErrEmptyString
 	}
 
-	t.t = str
-	t.value = s
-	return t
-}
-
-type unpacker struct {
-	cursor int
-
-	curr token
-	next token
-
-	nums    string
-	letters []string
-	strings.Builder
-}
-
-func (u *unpacker) Next() bool {
-	if u.cursor > len(u.letters)-2 {
-		return false
+	if isNumber(str[0]) {
+		return ErrInvalidString
 	}
 
-	if u.cursor == 0 {
-		u.curr = ntoken(u.letters[u.cursor])
-		u.cursor++
-		u.next = ntoken(u.letters[u.cursor])
-	} else {
-		u.curr = u.next
-		u.cursor++
-		u.next = ntoken(u.letters[u.cursor])
-	}
-
-	return true
-}
-
-func (u *unpacker) writeNTimes(s, n string) {
-	count, err := strconv.Atoi(n)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	u.WriteString(strings.Repeat(s, count))
+	return nil
 }
 
 func unpack(pkd string) (string, error) {
-	if pkd == "" {
-		return "", nil
-	}
+	letters := []rune(pkd)
 
-	if len(pkd) < 2 {
-		if strings.Contains("1234567890", pkd) {
-			return "", fmt.Errorf("invalid string")
+	if err := check(letters); err != nil {
+		if errors.Is(err, ErrEmptyString) {
+			return "", nil
 		}
 
-		return pkd, nil
+		return "", err
 	}
 
-	letters := strings.Split(pkd, "")
+	// returns count of repeated symbols and next symbol after count
+	getCount := func(start int) (count int, end int) {
+		var num string
 
-	log.Println("first", letters[0])
+		for i := start; i <= len(letters); i++ {
+			end = i
 
-	if strings.Contains("1234567890", letters[0]) {
-		return "", fmt.Errorf("invalid string")
+			if i == len(letters) { // конец строки
+				break
+			}
+
+			if !isNumber(letters[i]) {
+				break
+			}
+
+			num += string(letters[i])
+		}
+
+		// must get number
+		count, err := strconv.Atoi(num)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		return
 	}
 
-	total := ""
-	letter := ""
+	var (
+		total          strings.Builder
+		count, nextIdx int
+	)
 
-	for i, l := range letters {
-		if !strings.Contains("1234567890", l) {
-			if letter != "" {
-				total += letter
-			}
-			letter = l
-			if i == len(letters)-1 {
-				total += letter
-			}
+	//escape := false
+
+	for i := 0; i < len(letters); i++ {
+		if i == len(letters)-1 {
+			total.WriteRune(letters[i])
+
+			break
+		}
+
+		if !isNumber(letters[i+1]) {
+			total.WriteRune(letters[i])
 
 			continue
 		}
 
-		count, err := strconv.Atoi(l)
-		if err != nil {
-			return "", fmt.Errorf("invalid string")
+		//if letters[i] == '\\' {
+		//	escape = true
+		//	// escape sequence
+		//	// next symbol always is string
+		//}
+
+		count, nextIdx = getCount(i + 1)
+
+		total.WriteString(strings.Repeat(string(letters[i]), count))
+
+		if nextIdx > len(letters)-1 {
+			// последний элемент, заканчивается тут
+			// это означает что больше символов нет
+			break
+		} else {
+			log.Println("next letter: ", letters[nextIdx])
 		}
 
-		total += strings.Repeat(letter, count)
-		letter = ""
+		i = nextIdx - 1
 	}
 
-	return total, nil
-
-	//u := unpacker{
-	//	letters: strings.Split(s, ""),
-	//}
-	//
-	//var (
-	//	strNum, letter string
-	//)
-	//
-	//for u.Next() {
-	//	switch u.curr.t {
-	//	case num:
-	//		if letter == "" {
-	//			return "", fmt.Errorf("некорректная строка")
-	//		}
-	//
-	//		if u.next.t != num {
-	//			u.writeNTimes(letter, strNum)
-	//			strNum = ""
-	//			letter = ""
-	//		}
-	//	case str:
-	//		letter = u.curr.value
-	//	default:
-	//		log.Fatal("unknown token type")
-	//	}
-	//}
-	//
-	//return u.String(), nil
-	//
-	//
-	//
-	//
-	//
-	//
-	////a2b33
-	////
-	////1 итерация
-	////
-	////curr = a
-	////next = 2
-	////
-	////letter = curr
-	////strNum = next
-	////
-	////2 итерация
-	////curr = 2
-	////next = b
-	////
-	////write(letter * strNum)
-	////letter = next
-	////strNum = ""
-	////
-	////3 итерация
-	////curr = b
-	////next = 3
-	////
-	////strNum += next
-	////
-	////4 итерация
-	////curr = 3
-	////next = 3
-	////
-	////strNum += next
-	////
-	////5 итерация
-	////LAST
-	////
-	////write(letter * strNum)
-	//
-	//
-	//
-	//isNumber := func(s string) bool {
-	//	return strings.Contains(nums, s)
-	//}
-	//
-	//var next string
-	//for i, curr := range letters {
-	//	if i == len(letters)-1 { // последнее значение сразу записываем
-	//		if isNumber(curr) {
-	//			strNum += curr
-	//		}
-	//
-	//		writeNTimes(letter, strNum)
-	//
-	//		break
-	//	}
-	//
-	//	next = letters[i+1]
-	//
-	//	if !isNumber(curr) {
-	//		if !isNumber(next){
-	//
-	//		}
-	//	}
-	//
-	//	if !isNumber(next) {
-	//		b.WriteString(curr)
-	//	}
-	//
-	//
-	//	current letter | number
-	//	next    letter | number | ""
-	//
-	//	если current == number && next != number
-	//	тогда letter надо записать с текущим номером
-	//
-	//	if !isNumber(next) {
-	//
-	//	}
-	//
-	//	writeNTimes(letter, strNum)
-	//
-	//	if isNumber(curr) {
-	//		if letter != "" {
-	//			writeNTimes(letter, strNum)
-	//		}
-	//	}
-	//
-	//	next = letters[i+1]
-	//	if isNumber(next) {
-	//		continue
-	//	}
-	//
-	//	if i == len(letters)-1 {
-	//		// 3 если текущий символ последний то записываем
-	//		if !strings.Contains(nums, curr) {
-	//			b.WriteString(curr)
-	//
-	//			break
-	//		}
-	//
-	//		strNum += curr
-	//
-	//		count, err := strconv.Atoi(strNum)
-	//		if err != nil {
-	//			return "", fmt.Errorf("invalid string: %w", err)
-	//		}
-	//
-	//		b.WriteString(strings.Repeat(letter, count))
-	//
-	//		break
-	//	}
-	//
-	//	// 1 если текущая буква число и есть предыдущая буква
-	//	// тогда добавляем число в числовую строку
-	//	if strings.Contains(nums, curr) && letter != "" {
-	//		strNum += curr
-	//
-	//		// 3 если текущая буква последняя то записываем её
-	//		continue
-	//	}
-	//
-	//	// 2 если есть предыдущая буква то записываем предыдущую строку * количество раз
-	//	// в текстовый буфер количество строк затем очищаем число и строку
-	//	if letter != "" {
-	//		count, err := strconv.Atoi(strNum)
-	//		if err != nil {
-	//			return "", fmt.Errorf("invalid string: %w", err)
-	//		}
-	//
-	//		b.WriteString(strings.Repeat(letter, count))
-	//
-	//		strNum = ""
-	//	}
-	//
-	//	letter = curr
-	//
-	//}
-	//
-	//return b.String(), nil
+	return total.String(), nil
 }

@@ -24,12 +24,13 @@ import (
 */
 
 func main() {
-	log.Println(unpack("a1b2"))
+	log.Println(unpackV2("a1b2"))
 }
 
 const (
 	number = iota + 1
 	letter
+	empty
 )
 
 type token struct {
@@ -37,34 +38,35 @@ type token struct {
 	value interface{}
 }
 
+func (t token) string() string {
+	log.Println(t.value)
+	return string(t.value.(rune))
+}
+
+func (t token) int() int {
+	return t.value.(int)
+}
+
 type tokenizer struct {
 	idx     int
 	letters []rune
 	current token
-	next 	token
+	next    token
 }
 
-func (t *tokenizer) token() (next bool) {
-
-	// recive current token
+func (t *tokenizer) readNext() {
 	switch {
+	case t.idx >= len(t.letters):
+		t.next.t = empty
+
 	case t.letters[t.idx] == '\\':
 		t.idx++
-		t.current = token{t: letter, value: t.letters[t.idx]}
+		if t.idx >= len(t.letters) {
+			t.next.t = empty
 
-	case isNumber(t.letters[t.idx]):
-		t.current = token{t: number, value: t.getCount()}
-		t.idx++
+			return
+		}
 
-	default:
-		t.current = token{t: letter, value: t.letters[t.idx]}
-		t.idx++
-	}
-
-	// recive next token
-	switch {
-	case t.letters[t.idx] == '\\':
-		t.idx++
 		t.next = token{t: letter, value: t.letters[t.idx]}
 
 	case isNumber(t.letters[t.idx]):
@@ -72,28 +74,37 @@ func (t *tokenizer) token() (next bool) {
 
 	default:
 		t.next = token{t: letter, value: t.letters[t.idx]}
-		t.idx++
 	}
 
-	return t.idx < len(t.letters)
+	t.idx++
+}
+
+func (t *tokenizer) token() (next bool) {
+	if t.idx > len(t.letters) {
+		return false
+	}
+
+	if t.idx == 0 {
+		t.readNext()
+	}
+
+	t.current = t.next
+	t.readNext()
+
+	return t.idx < len(t.letters)+1
 }
 
 func (t *tokenizer) getCount() (count int) {
 	var num string
 
-	for i := idx; i <= len(letters); i++ {
-		end = i
-
-		if i == len(letters) { // конец строки
+	for ; t.idx < len(t.letters); t.idx++ {
+		if !isNumber(t.letters[t.idx]) {
 			break
 		}
 
-		if !isNumber(letters[i]) {
-			break
-		}
-
-		num += string(letters[i])
+		num += string(t.letters[t.idx])
 	}
+	t.idx--
 
 	// must get number
 	count, err := strconv.Atoi(num)
@@ -116,36 +127,11 @@ func (t *tokenizer) check() error {
 	return nil
 }
 
-//func (t *tokenizer) nextToken() token {
-//	if t.escape {
-//		t.escape = false
-//		return token{t: letter, value: t.letters[i]}
-//	}
-//
-//	if isNumber(t.letters[i]) {
-//		return token{t: number, value: t.letters[i]}
-//	}
-//
-//	return token{t: letter, value: t.letters[i]}
-//}
-
 var ErrInvalidString = fmt.Errorf("invalid string")
 var ErrEmptyString = fmt.Errorf("empty string")
 
 func isNumber(str rune) bool {
 	return strings.ContainsRune("1234567890", str)
-}
-
-func check(str []rune) error {
-	if len(str) == 0 {
-		return ErrEmptyString
-	}
-
-	if isNumber(str[0]) {
-		return ErrInvalidString
-	}
-
-	return nil
 }
 
 func unpackV2(pkd string) (string, error) {
@@ -163,136 +149,29 @@ func unpackV2(pkd string) (string, error) {
 	}
 
 	var (
-		total          strings.Builder
-		count, nextIdx int
+		total strings.Builder
 	)
-
-	var ltr := ""
 
 	for tkz.token() {
-		switch tkz.current.t {
-		case number: // число на которое надо умножить letter
-		case letter: // символ который надо повторить
-			ltr *
-		}
-	}
-
-	//escape := false
-
-	for i := 0; i < len(letters); i++ {
-		if i == len(letters)-1 {
-			total.WriteRune(letters[i])
-
-			break
-		}
-
-		if !isNumber(letters[i+1]) {
-			total.WriteRune(letters[i])
-
-			continue
-		}
-
-		//if letters[i] == '\\' {
-		//	escape = true
-		//	// escape sequence
-		//	// next symbol always is string
-		//}
-
-		count, nextIdx = getCount(i + 1)
-
-		total.WriteString(strings.Repeat(string(letters[i]), count))
-
-		if nextIdx > len(letters)-1 {
-			// последний элемент, заканчивается тут
-			// это означает что больше символов нет
-			break
-		} else {
-			log.Println("next letter: ", letters[nextIdx])
-		}
-
-		i = nextIdx - 1
-	}
-
-	return total.String(), nil
-}
-
-func unpack(pkd string) (string, error) {
-	letters := []rune(pkd)
-
-	if err := check(letters); err != nil {
-		if errors.Is(err, ErrEmptyString) {
-			return "", nil
-		}
-
-		return "", err
-	}
-
-	// returns count of repeated symbols and next symbol after count
-	getCount := func(start int) (count int, end int) {
-		var num string
-
-		for i := start; i <= len(letters); i++ {
-			end = i
-
-			if i == len(letters) { // конец строки
-				break
+		switch {
+		case tkz.next.t == number:
+			if tkz.current.t == letter {
+				total.WriteString(
+					strings.Repeat(tkz.current.string(), tkz.next.int()),
+				)
 			}
 
-			if !isNumber(letters[i]) {
-				break
+		case tkz.next.t == letter:
+			if tkz.current.t == letter {
+				total.WriteString(tkz.current.string())
 			}
-
-			num += string(letters[i])
+		default:
+			log.Println("UNKNOWN", tkz.current, tkz.next)
 		}
-
-		// must get number
-		count, err := strconv.Atoi(num)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		return
 	}
 
-	var (
-		total          strings.Builder
-		count, nextIdx int
-	)
-
-	//escape := false
-
-	for i := 0; i < len(letters); i++ {
-		if i == len(letters)-1 {
-			total.WriteRune(letters[i])
-
-			break
-		}
-
-		if !isNumber(letters[i+1]) {
-			total.WriteRune(letters[i])
-
-			continue
-		}
-
-		//if letters[i] == '\\' {
-		//	escape = true
-		//	// escape sequence
-		//	// next symbol always is string
-		//}
-
-		count, nextIdx = getCount(i + 1)
-
-		total.WriteString(strings.Repeat(string(letters[i]), count))
-
-		if nextIdx > len(letters)-1 {
-			// последний элемент, заканчивается тут
-			// это означает что больше символов нет
-			break
-		} else {
-			log.Println("next letter: ", letters[nextIdx])
-		}
-
-		i = nextIdx - 1
+	if tkz.current.t == letter {
+		total.WriteString(tkz.current.string())
 	}
 
 	return total.String(), nil

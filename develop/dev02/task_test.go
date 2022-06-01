@@ -72,8 +72,10 @@ func Test_unpack2(t *testing.T) {
 		{"a2", "aa", false},
 		{"a2b3c", "aabbbc", false},
 		{`qwe\4\5`, "qwe45", false},
-		{`qwe\44`, "qwe44444", false},
+		{`qwe\44`, "qwe4444", false},
 		{`qwe\\5`, `qwe\\\\\`, false},
+		{`qwe\\5\\`, `qwe\\\\\\`, false},
+		{`qwe\\5\`, `qwe\\\\\`, false},
 	}
 
 	//t.Parallel()
@@ -84,7 +86,7 @@ func Test_unpack2(t *testing.T) {
 		t.Run(tc.input, func(t *testing.T) {
 			//t.Parallel()
 
-			out, err := unpack(tc.input)
+			out, err := unpackV2(tc.input)
 			if tc.errExpected {
 				if err == nil {
 					t.Errorf("expected error, got %s", out)

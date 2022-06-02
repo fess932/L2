@@ -43,22 +43,8 @@ const (
 	useU            //-u — не выводить повторяющиеся строки
 )
 
-type Slice []string
-
-func (s Slice) Len() int {
-	return len(s)
-}
-
-func (s Slice) Less(i, j int) bool {
-	return s[i] < s[j]
-}
-
-func (s Slice) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-
 func linuxSort(r io.Reader, w io.Writer, args ...int) {
-	slice := make(Slice, 0, 50)
+	slice := make(sort.StringSlice, 0, 50)
 
 	buf := bufio.NewScanner(r)
 	for buf.Scan() {
@@ -66,21 +52,68 @@ func linuxSort(r io.Reader, w io.Writer, args ...int) {
 	}
 
 	{
-		sort.Strings(slice)
+		var sl sort.Interface = slice
+
+		if len(args) == 0 {
+			sort.Strings(slice)
+		}
 
 		for _, v := range args {
 			switch v {
-			case useK:
-			case useR:
-				slice = sort.Reverse(&slice).(Slice)
+			case useK: // sort by n word in line
+				//sort.Sort(byK(sl))
+			case useR: // make reverse
+				sl = sort.Reverse(sl)
+			case useU: // make uniq
+				sl = Uniq(sl)
+				log.Println(sl)
 			default:
 				log.Println("unknown option", v)
 			}
 		}
 
+		sort.Sort(sl)
 	}
 
 	for _, v := range slice {
 		io.WriteString(w, v+"\n") //nolint:errcheck
 	}
+}
+
+func Uniq(data sort.Interface) sort.Interface {
+	// calc uniq slice, set max len = last uniq index
+
+	length := data.Len()
+	if length < 2 {
+		return data
+	}
+
+	i, j := 0, 1
+
+	// find the first duplicate
+	for j < length && data.Less(i, j) {
+		i++
+		j++
+	}
+
+	// this loop is simpler after the first duplicate is found
+	for ; j < length; j++ {
+		if !(data.Less(i, j) && data.Less(j, i)) {
+			i++
+			data.Swap(i, j)
+		}
+	}
+
+	// This embedded Interface permits Reverse to use the methods of
+	// another Interface implementation.
+	return &uniq{i + 1, data}
+}
+
+type uniq struct {
+	lastUniq int
+	sort.Interface
+}
+
+func (u uniq) Len() int {
+	return u.lastUniq
 }

@@ -153,7 +153,8 @@ func (s numberSorter) Less(i, j int) bool {
 // parseInt parse bad string with first number chars to int
 // "9asd" > "9"
 func parseInt(str string) int {
-	total := ""
+	var total string
+
 	for _, c := range str {
 		// todo: else "-" for negative numbers
 		if !strings.ContainsAny(string(c), "0123456789") {

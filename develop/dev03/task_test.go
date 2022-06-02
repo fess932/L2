@@ -7,56 +7,77 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const data1 = `3 three two
-1 one two
+const data1 = `3 three two 10
+1 one two 2s 2 s
 2 two one
 2 two one
-1 one two
 `
 
-const data2 = `1 one two
-1 one two
-2 two one
-2 two one
-3 three two
-`
-
-const data3 = `3 three two
-2 two one
-2 two one
-1 one two
-1 one two
-`
-
-func TestLinuxSort(t *testing.T) {
+func TestLinuxSortOptions(t *testing.T) {
 	tcs := []struct {
 		name, in, out string
-		flags         []int
+		flags         []SortOption
 	}{
 		{
-			"simple sort", data1, data2, nil,
+			"simple sort", data1,
+			`1 one two 2
+2 two one
+2 two one
+3 three two 10
+`, nil,
 		},
 
 		{
-			"reverse sort", data1, data3, []int{useR},
+			"reverse sort", data1, `3 three two 10
+2 two one
+2 two one
+1 one two 2
+`, []SortOption{withReverse()},
 		},
 
 		{
 			"uniq sort", data1,
-			`1 one two
+			`1 one two 2
 2 two one
-3 three two
+3 three two 10
 `,
-			[]int{useU},
+			[]SortOption{withUniq()},
 		},
 
 		{
 			"uniq reverse sort", data1,
-			`3 three two
+			`3 three two 10
 2 two one
-1 one two
+1 one two 2
 `,
-			[]int{useU, useR},
+			[]SortOption{withUniq(), withReverse()},
+		},
+
+		{
+			"sort k column number", data1,
+			`2 two one
+2 two one
+3 three two 10
+1 one two 2
+`,
+			[]SortOption{withColumnNumber(4)},
+		},
+		{
+			"sort k column number rever", data1,
+			`1 one two 2
+3 three two 10
+2 two one
+`,
+			[]SortOption{withColumnNumber(4), withReverse(), withUniq()},
+		},
+		{
+			"sort by number value and column 4", data1,
+			`2 two one
+2 two one
+1 one two 2
+3 three two 10
+`,
+			[]SortOption{withNumber(4)},
 		},
 	}
 
@@ -69,7 +90,7 @@ func TestLinuxSort(t *testing.T) {
 			t.Parallel()
 
 			w := &strings.Builder{}
-			linuxSort(strings.NewReader(v.in), w, v.flags...)
+			linuxSortOptions(strings.NewReader(v.in), w, v.flags...)
 			require.Equal(t, v.out, w.String())
 		})
 	}

@@ -6,6 +6,8 @@ import (
 	"log"
 	"os"
 	"sort"
+	"strconv"
+	"strings"
 )
 
 /*
@@ -26,16 +28,6 @@ import (
 Программа должна проходить все тесты. Код должен проходить проверки go vet и golint.
 */
 
-func main() {
-	f, err := os.Open("./develop/dev03/task.go")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer f.Close()
-
-	linuxSort(f, os.Stdout)
-}
-
 const (
 	// filters ops
 	useU = iota + 1 //-u — не выводить повторяющиеся строки
@@ -46,13 +38,18 @@ const (
 	useR //-r — сортировать в обратном порядке
 )
 
-// 1) all filter operations
-// 2) all sort operations
+func main() {
+	f, err := os.Open("./develop/dev03/task.go")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
 
-func linuxSort(r io.Reader, w io.Writer, args ...int) {
-	sort.Ints(args) // sort flags in ops order
+	linuxSortOptions(f, os.Stdout)
+}
 
-	slice := make(sort.StringSlice, 0, 50)
+func linuxSortOptions(r io.Reader, w io.Writer, options ...SortOption) {
+	slice := make(sort.StringSlice, 0, 32)
 
 	buf := bufio.NewScanner(r)
 	for buf.Scan() {
@@ -60,33 +57,35 @@ func linuxSort(r io.Reader, w io.Writer, args ...int) {
 	}
 
 	var sl sort.Interface = slice
-	sort.Sort(sl)
 
-	if len(args) > 0 {
-		for _, v := range args {
-			switch v {
-			case useU: // make uniq
-				sl = Uniq(sl)
-			case useK: // sort by n word in line
-				// sort.Sort(byK(sl))
-
-			case useR: // make reverse
-				sl = sort.Reverse(sl)
-
-			default:
-				log.Println("unknown option", v)
-			}
-		}
-
-		sort.Sort(sl)
+	for _, o := range options {
+		sl = o(sl)
 	}
+
+	sort.Sort(sl)
 
 	for i := 0; i < sl.Len(); i++ {
 		io.WriteString(w, slice[i]+"\n") //nolint:errcheck
 	}
 }
 
-// Uniq input sorted slice, returns slice with Length() = all uniq values
+///////////////////////////////////////////
+// sort options
+///////////////////////////////////////////
+
+type SortOption func(sort.Interface) sort.Interface
+
+func withReverse() SortOption {
+	return sort.Reverse
+}
+
+////////////////////////////////////////
+
+func withUniq() SortOption {
+	return Uniq
+}
+
+// Uniq input sorted slice, returns slice with Length() == all uniq values
 func Uniq(data sort.Interface) sort.Interface {
 	// calc uniq slice, set max len = last uniq index
 
@@ -124,3 +123,79 @@ type uniq struct {
 func (u uniq) Len() int {
 	return u.lastUniq
 }
+
+////////////////////////////////////////
+
+func withColumnNumber(k int) SortOption {
+	return func(s sort.Interface) sort.Interface {
+		return &columnSorter{k - 1, s.(sort.StringSlice)}
+	}
+}
+
+type columnSorter struct {
+	column int
+	sort.StringSlice
+}
+
+func (s columnSorter) Less(i, j int) bool {
+	var str1, str2 string
+
+	v1 := strings.SplitN(s.StringSlice[i], " ", s.column+1)
+	if len(v1)-1 == s.column {
+		str1 = v1[s.column]
+	}
+
+	v2 := strings.SplitN(s.StringSlice[j], " ", s.column+1)
+	if len(v2)-1 == s.column {
+		str2 = v2[s.column]
+	}
+
+	return str1 < str2
+}
+
+//-n — сортировать по числовому значению
+func withNumber(column int) SortOption {
+	return func(s sort.Interface) sort.Interface {
+		return &numberSorter{column - 1, s.(sort.StringSlice)}
+	}
+}
+
+type numberSorter struct {
+	column int
+	sort.StringSlice
+}
+
+func (s numberSorter) Less(i, j int) bool {
+	var (
+		buf        int
+		num1, num2 int
+		err        error
+	)
+
+	v1 := strings.SplitN(s.StringSlice[i], " ", s.column+1)
+	if len(v1)-1 == s.column {
+		buf, err = strconv.Atoi(v1[s.column])
+		if err == nil {
+			num1 = buf
+		} else {
+			log.Println(err)
+		}
+	}
+
+	v2 := strings.SplitN(s.StringSlice[j], " ", s.column+1)
+	if len(v2)-1 == s.column {
+		buf, err = strconv.Atoi(v2[s.column])
+		if err == nil {
+			num2 = buf
+		} else {
+			log.Fatal(err)
+		}
+	}
+
+	return num1 < num2
+}
+
+//-M — сортировать по названию месяца
+//-b — игнорировать хвостовые пробелы
+//-c — проверять отсортированы ли данные
+//-h — сортировать по числовому значению с учётом суффиксов

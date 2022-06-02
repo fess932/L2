@@ -11,9 +11,11 @@ const data1 = `3 three two
 1 one two
 2 two one
 2 two one
+1 one two
 `
 
 const data2 = `1 one two
+1 one two
 2 two one
 2 two one
 3 three two
@@ -22,6 +24,7 @@ const data2 = `1 one two
 const data3 = `3 three two
 2 two one
 2 two one
+1 one two
 1 one two
 `
 
@@ -49,9 +52,9 @@ func TestLinuxSort(t *testing.T) {
 
 		{
 			"uniq reverse sort", data1,
-			`1 one two
+			`3 three two
 2 two one
-3 three two
+1 one two
 `,
 			[]int{useU, useR},
 		},

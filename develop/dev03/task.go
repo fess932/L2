@@ -37,13 +37,21 @@ func main() {
 }
 
 const (
-	useK = iota + 1 //-k — указание колонки для сортировки
-	useN            //-n — сортировать по числовому значению
-	useR            //-r — сортировать в обратном порядке
-	useU            //-u — не выводить повторяющиеся строки
+	// filters ops
+	useU = iota + 1 //-u — не выводить повторяющиеся строки
+
+	// sort flags
+	useK //-k — указание колонки для сортировки
+	useN //-n — сортировать по числовому значению
+	useR //-r — сортировать в обратном порядке
 )
 
+// 1) all filter operations
+// 2) all sort operations
+
 func linuxSort(r io.Reader, w io.Writer, args ...int) {
+	sort.Ints(args) // sort flags in ops order
+
 	slice := make(sort.StringSlice, 0, 50)
 
 	buf := bufio.NewScanner(r)
@@ -51,22 +59,20 @@ func linuxSort(r io.Reader, w io.Writer, args ...int) {
 		slice = append(slice, buf.Text())
 	}
 
-	{
-		var sl sort.Interface = slice
+	var sl sort.Interface = slice
+	sort.Sort(sl)
 
-		if len(args) == 0 {
-			sort.Strings(slice)
-		}
-
+	if len(args) > 0 {
 		for _, v := range args {
 			switch v {
-			case useK: // sort by n word in line
-				//sort.Sort(byK(sl))
-			case useR: // make reverse
-				sl = sort.Reverse(sl)
 			case useU: // make uniq
 				sl = Uniq(sl)
-				log.Println(sl)
+			case useK: // sort by n word in line
+				// sort.Sort(byK(sl))
+
+			case useR: // make reverse
+				sl = sort.Reverse(sl)
+
 			default:
 				log.Println("unknown option", v)
 			}
@@ -75,13 +81,16 @@ func linuxSort(r io.Reader, w io.Writer, args ...int) {
 		sort.Sort(sl)
 	}
 
-	for _, v := range slice {
-		io.WriteString(w, v+"\n") //nolint:errcheck
+	for i := 0; i < sl.Len(); i++ {
+		io.WriteString(w, slice[i]+"\n") //nolint:errcheck
 	}
 }
 
+// Uniq input sorted slice, returns slice with Length() = all uniq values
 func Uniq(data sort.Interface) sort.Interface {
 	// calc uniq slice, set max len = last uniq index
+
+	sort.Sort(data)
 
 	length := data.Len()
 	if length < 2 {
@@ -98,14 +107,12 @@ func Uniq(data sort.Interface) sort.Interface {
 
 	// this loop is simpler after the first duplicate is found
 	for ; j < length; j++ {
-		if !(data.Less(i, j) && data.Less(j, i)) {
+		if data.Less(i, j) {
 			i++
 			data.Swap(i, j)
 		}
 	}
 
-	// This embedded Interface permits Reverse to use the methods of
-	// another Interface implementation.
 	return &uniq{i + 1, data}
 }
 

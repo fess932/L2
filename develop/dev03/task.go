@@ -86,9 +86,8 @@ func withUniq() SortOption {
 }
 
 // Uniq input sorted slice, returns slice with Length() == all uniq values
+// calc uniq slice, set max len = last uniq index
 func Uniq(data sort.Interface) sort.Interface {
-	// calc uniq slice, set max len = last uniq index
-
 	sort.Sort(data)
 
 	length := data.Len()

@@ -4,6 +4,16 @@ import (
 	"testing"
 )
 
+func Fuzz_unpack2(f *testing.F) {
+	f.Add(5, "hello")
+	f.Fuzz(func(t *testing.T, i int, s string) {
+		out, err := unpackV2(s)
+		if err != nil && out != "" {
+			t.Errorf("%q, %v", out, err)
+		}
+	})
+}
+
 func Test_unpack2(t *testing.T) {
 
 	tcs := []struct {
@@ -27,6 +37,7 @@ func Test_unpack2(t *testing.T) {
 		{`qwe\\5`, `qwe\\\\\`, false},
 		{`qwe\\5\\`, `qwe\\\\\\`, false},
 		{`qwe\\5\`, `qwe\\\\\`, false},
+		{`f1351a51c9fa1633a2757bbc648d0fccd38523dd2ce28c803b3eff822bf99e80`, "", false},
 	}
 
 	//t.Parallel()

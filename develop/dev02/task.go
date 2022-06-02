@@ -39,7 +39,6 @@ type token struct {
 }
 
 func (t token) string() string {
-	log.Println(t.value)
 	return string(t.value.(rune))
 }
 

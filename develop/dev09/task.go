@@ -1,11 +1,13 @@
 package main
 
 import (
+	"fmt"
+	"io"
 	"log"
 	"os"
-	"path"
 	"path/filepath"
 
+	"net/http"
 	"net/url"
 
 	"github.com/gocolly/colly/v2"
@@ -18,35 +20,80 @@ import (
 */
 
 func main() {
-	wget("https://golang.org/", "./develop/dev09/tmp/")
+	if len(os.Args) < 3 {
+		log.Fatal("Недостаточно аргументов")
+	}
+
+	if os.Args[1] == "-r" {
+		if len(os.Args) < 4 {
+			log.Fatal("Недостаточно аргументов")
+		}
+
+		if err := gwget(os.Args[2], os.Args[3]); err != nil {
+			log.Fatal(err)
+		}
+
+		return
+	}
+
+	if err := download(os.Args[1], os.Args[2]); err != nil {
+		log.Fatal("ошибка", err)
+	}
 }
 
-// flag -r - рекурсивно скачивать все ссылки на сайте с тем же доменом
+// gwget - программа для скачивания сайтов
+// expample:
+// gwget [-r] url dir
+// gwget [-r] https://go.dev/ ./develop/dev09/tmp/go
 
-func wget(turl string, p string) {
-	p, err := filepath.Abs(p)
+func download(targetUrl string, target string) error {
+	parsedTargetUrl, err := url.ParseRequestURI(targetUrl)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("не удалось получить url путь %s: %w", targetUrl, err)
 	}
-	// w, err := http.NewRequest("GET", urgol, nil)
-	// if err != nil {
-	// 	panic(err)
-	// }
 
-	// r, err := http.DefaultClient.Do(w)
-	// if err != nil {
-	// 	panic(err)
-	// }
+	target, err = filepath.Abs(target)
+	if err != nil {
+		return fmt.Errorf("не удалось получить абсолютный путь для %s: %w", target, err)
+	}
 
-	// body, err := io.ReadAll(r.Body)
-	// if err != nil {
-	// 	panic(err)
-	// }
+	f, err := os.Create(target)
+	if err != nil {
+		return fmt.Errorf("не удалось создать файл %w", err)
+	}
+	defer f.Close()
 
-	// os.WriteFile(path.Join(p, "index.html"), body, 0644)
+	log.Println(parsedTargetUrl, target)
+
+	req, err := http.NewRequest("GET", targetUrl, nil)
+	if err != nil {
+		return fmt.Errorf("не удалось создать запрос %w", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("не удалось выполнить запрос %w", err)
+	}
+
+	io.Copy(f, resp.Body)
+
+	return nil
+}
+
+func gwget(targetUrl string, targetDir string) error {
+	targetDir, err := filepath.Abs(targetDir)
+	if err != nil {
+		return fmt.Errorf("не удалось получить абсолютный путь для директории %w", err)
+	}
+
+	parsedTargetUrl, err := url.ParseRequestURI(targetUrl)
+	if err != nil {
+		return fmt.Errorf("не удалось получить url путь %s: %w", targetUrl, err)
+	}
+
+	log.Println(parsedTargetUrl, targetDir)
 
 	c := colly.NewCollector()
-
 	c.OnHTML("link[href]", func(e *colly.HTMLElement) {
 		next := e.Attr("href")
 
@@ -74,43 +121,56 @@ func wget(turl string, p string) {
 
 		e.Request.Visit(next)
 	})
+	c.OnHTML("img[src]", func(e *colly.HTMLElement) {
+		next := e.Attr("src")
 
-	c.OnResponse(func(r *colly.Response) {
-		u := r.Request.URL
-		log.Println("Visiting", u, u.Path)
-
-		dirPath := path.Join(p, u.Path)
-		os.MkdirAll(dirPath, os.ModePerm)
-
-		// TODO:
-		// check stylesheet (end on .css)
-		// js (end on .js)
-		// check any with .* on end
-		// default index.html
-
-		log.Println("FILENAME", filepath.Ext(u.String()))
-
-		if filepath.Ext(u.String()) == "" {
-
+		if !toVisit(next) {
+			return
 		}
 
-		if err = r.Save(dirPath + "/index.html"); err != nil {
+		e.Request.Visit(next)
+	})
+	c.OnResponse(func(r *colly.Response) {
+		reqUri := r.Request.URL.RequestURI()
+
+		var absFileName string
+
+		ext := filepath.Ext(reqUri)
+
+		if ext == "" {
+			dirpath := filepath.Join(targetDir, reqUri)
+			log.Println("DIRPATH without ext", dirpath)
+
+			os.MkdirAll(filepath.Join(dirpath, reqUri), os.ModePerm)
+			absFileName = filepath.Join(dirpath, "index.html")
+		} else {
+			log.Println("EXT", ext)
+
+			dirpath := filepath.Join(targetDir, filepath.Dir(reqUri))
+			log.Println("DIRPATH with ext", dirpath)
+
+			os.MkdirAll(dirpath, os.ModePerm)
+
+			absFileName = filepath.Join(dirpath, filepath.Base(reqUri))
+		}
+
+		log.Println("ABSFILENAME", absFileName)
+		log.Println()
+
+		if err := os.WriteFile(absFileName, r.Body, 0644); err != nil {
 			log.Fatal(err)
 		}
-
-		// if err := os.WriteFile(dirPath+"/index.html", r.Body, os.ModePerm); err != nil {
-		// log.Println(err)
-		// }
 	})
 
-	c.Visit(turl)
+	c.AllowedDomains = append(c.AllowedDomains, parsedTargetUrl.Host)
 
-	//2 вида ссылок
-	//абсолютные
-	//https://google.com"
-	//
-	//относительные
-	///js/jquery.js
+	c.Async = true
+	if err := c.Visit(parsedTargetUrl.String()); err != nil {
+		return fmt.Errorf("не удалось посетить сайт %w", err)
+	}
+	c.Wait()
+
+	return nil
 }
 
 func toVisit(next string) bool {

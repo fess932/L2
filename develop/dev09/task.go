@@ -49,63 +49,30 @@ func wget(turl string, p string) {
 
 	c.OnHTML("link[href]", func(e *colly.HTMLElement) {
 		next := e.Attr("href")
-		if next == "nil" {
-			return
-		}
 
-		u, err := url.Parse(next)
-		if err != nil {
-			log.Println(err)
-			return
-		}
-
-		if u.IsAbs() {
+		if !toVisit(next) {
 			return
 		}
 
 		e.Request.Visit(next)
 	})
-
 	c.OnHTML("script[src]", func(e *colly.HTMLElement) {
 		next := e.Attr("src")
-		if next == "nil" {
-			return
-		}
 
-		u, err := url.Parse(next)
-		if err != nil {
-			log.Println(err)
-			return
-		}
-
-		if u.IsAbs() {
+		if !toVisit(next) {
 			return
 		}
 
 		e.Request.Visit(next)
 	})
-
 	c.OnHTML("a[href]", func(e *colly.HTMLElement) {
 		next := e.Attr("href")
-		if next == "nil" {
-			return
-		}
 
-		u, err := url.Parse(next)
-		if err != nil {
-			log.Println(err)
-			return
-		}
-
-		if u.IsAbs() {
+		if !toVisit(next) {
 			return
 		}
 
 		e.Request.Visit(next)
-	})
-
-	c.OnRequest(func(r *colly.Request) {
-		// log.Println("Visiting", r.URL)
 	})
 
 	c.OnResponse(func(r *colly.Response) {
@@ -121,8 +88,13 @@ func wget(turl string, p string) {
 		// check any with .* on end
 		// default index.html
 
-		log.Println("FILENAME", r.FileName(), r.Headers)
-		if err := r.Save(dirPath + "/index.html"); err != nil {
+		log.Println("FILENAME", filepath.Ext(u.String()))
+
+		if filepath.Ext(u.String()) == "" {
+
+		}
+
+		if err = r.Save(dirPath + "/index.html"); err != nil {
 			log.Fatal(err)
 		}
 
@@ -139,4 +111,23 @@ func wget(turl string, p string) {
 	//
 	//относительные
 	///js/jquery.js
+}
+
+func toVisit(next string) bool {
+	if next == "" {
+		return false
+	}
+
+	u, err := url.Parse(next)
+	if err != nil {
+		log.Println(err)
+
+		return false
+	}
+
+	if u.IsAbs() {
+		return false
+	}
+
+	return true
 }

@@ -8,25 +8,34 @@ import (
 )
 
 func Test_CD(t *testing.T) {
-	os.Setenv("HOME", "/home/fess932")
-
 	tcs := []struct {
 		name   string
 		path   string
 		result string
 	}{
 		{
-			name:   "home",
+			name:   "user home",
 			path:   "",
-			result: "/home/fess932",
+			result: "/home/restar",
+		},
+		{
+			name:   "home",
+			path:   "/home",
+			result: "/home",
+		},
+		{
+			name:   "root",
+			path:   "..",
+			result: "/",
 		},
 	}
 
 	for _, v := range tcs {
-
 		t.Run(v.name, func(t *testing.T) {
 			cd(v.path)
-			require.Equal(t, v.result, os.Getenv("PWD"))
+			dir, err := os.Getwd()
+			require.NoError(t, err)
+			require.Equal(t, v.result, dir)
 		})
 	}
 }

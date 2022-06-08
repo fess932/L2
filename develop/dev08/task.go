@@ -7,7 +7,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -61,18 +60,23 @@ func (sh *GoShell) Listen() {
 
 	switch commands[0] {
 	case "pwd":
-		sh.pwd()
+		writeString(sh.w, pwd(), "\n")
+
 	case "cd":
 		if len(commands) == 2 {
 			cd(commands[1])
 		} else {
 			cd("")
 		}
+
 	case "ls":
 		writeString(sh.w, ls(pwd()))
 
 	case "nc":
 		nc(sh.r)
+
+	case "echo":
+		echo(sh.w, commands)
 
 	case "exit":
 		os.Exit(0)
@@ -80,11 +84,6 @@ func (sh *GoShell) Listen() {
 	default:
 		writeString(sh.w, fmt.Sprintf("Unknown command [%s]\n", str))
 	}
-}
-
-// print current path
-func (sh *GoShell) pwd() {
-	io.WriteString(sh.w, pwd()+"\n")
 }
 
 func (sh *GoShell) Greeteings() {
@@ -99,22 +98,13 @@ func (sh *GoShell) line() {
 // ############################################################### //
 
 func cd(path string) {
-	if path == "" {
+	if path == "" || path == "~" {
 		path = os.Getenv("HOME")
 	}
 
-	path, err := filepath.Abs(path)
-	if err != nil {
+	if err := os.Chdir(path); err != nil {
 		log.Println(err)
-		return
 	}
-
-	log.Println("cd to path:", path)
-	os.Setenv("PWD", path)
-	// .. up
-	// ./ relative
-	// /../../../ absolute
-	// . current
 }
 
 func ls(path string) string {
@@ -137,14 +127,31 @@ func username() string {
 	return os.Getenv("USER")
 }
 
+func echo(w io.Writer, strs []string) {
+
+	for i, v := range strs {
+		if len(v) > 2 && v[0] == '$' {
+			strs[i] = os.Getenv(v[1:])
+		}
+	}
+
+	strs = append(strs, "\n")
+	writeString(w, strs...)
+}
+
 // return current path
 func pwd() string {
-	return os.Getenv("PWD")
+	if pwd, err := os.Getwd(); err != nil {
+		log.Println(err)
+		return ""
+	} else {
+		return pwd
+	}
 }
 
 // write string to writer
-func writeString(w io.Writer, str string) {
-	io.WriteString(w, str)
+func writeString(w io.Writer, str ...string) {
+	io.WriteString(w, strings.Join(str, " "))
 }
 
 // -u udp, default tcp

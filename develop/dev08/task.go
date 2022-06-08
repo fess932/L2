@@ -2,10 +2,12 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"log"
 	"net"
 	"os"
+	"strings"
 )
 
 /*
@@ -19,19 +21,6 @@ import (
 Программа должна проходить все тесты. Код должен проходить проверки go vet и golint.
 */
 
-// -u udp, default tcp
-// hostname port
-func nc(r io.Reader) {
-
-	conn, err := net.Dial("tcp", "127.0.0.1:80")
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	io.WriteString(conn, "bla bla")
-}
-
 // слушать команды
 //
 
@@ -39,7 +28,6 @@ func nc(r io.Reader) {
 // os.Output
 
 func main() {
-
 	sh := NewShell(os.Stdin, os.Stdout)
 
 	sh.Greeteings()
@@ -50,15 +38,6 @@ func main() {
 
 func NewShell(r io.Reader, w io.Writer) *GoShell {
 	return &GoShell{r, w}
-}
-
-func (sh *GoShell) Greeteings() {
-	io.WriteString(sh.w, "Hello, %username%")
-}
-
-// print command line
-func (sh *GoShell) line() {
-	io.WriteString(sh.w, "\n[%username%]$ ")
 }
 
 // 1 Greeteings
@@ -75,31 +54,84 @@ func (sh *GoShell) Listen() {
 
 	// read from r
 	buf := bufio.NewScanner(sh.r)
-	buf.Scan()
+	if !buf.Scan() {
+		os.Exit(0)
+	}
 	str := buf.Text()
 
-	switch str {
+	commands := strings.Split(str, " ")
+
+	switch commands[0] {
 	case "pwd":
 		sh.pwd()
+	case "cd":
+		if len(commands) == 2 {
+			sh.cd(commands[1])
+		}
 	case "nc":
 		nc(sh.r)
 
 	case "exit":
 		os.Exit(0)
+
+	default:
+		writeString(sh.w, fmt.Sprintf("Unknown command [%s]\n", str))
 	}
-
-	io.WriteString(sh.w, str)
-
 }
 
 // print current path
 func (sh *GoShell) pwd() {
-	io.WriteString(sh.w, os.Getenv("PWD"))
+	io.WriteString(sh.w, pwd()+"\n")
 }
 
-func (sh *GoShell) cd() {
+func (sh *GoShell) cd(path string) {
+	switch path {
+	case "":
+		log.Println("to home dir")
+	default:
+		log.Println("to path", path)
+	}
+
 	// .. up
 	// ./ relative
 	// /../../../ absolute
 	// . current
+}
+
+func (sh *GoShell) Greeteings() {
+	writeString(sh.w, fmt.Sprintf("Welcome %s!\n", username()))
+}
+
+// print command line
+func (sh *GoShell) line() {
+	writeString(sh.w, fmt.Sprintf("[%s:%s]$ ", username(), pwd()))
+}
+
+// ############################################################### //
+
+func username() string {
+	return os.Getenv("USER")
+}
+
+// return current path
+func pwd() string {
+	return os.Getenv("PWD")
+}
+
+// write string to writer
+func writeString(w io.Writer, str string) {
+	io.WriteString(w, str)
+}
+
+// -u udp, default tcp
+// hostname port
+func nc(r io.Reader) {
+
+	conn, err := net.Dial("tcp", "127.0.0.1:80")
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	io.WriteString(conn, "bla bla")
 }

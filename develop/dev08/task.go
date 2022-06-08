@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -54,8 +55,8 @@ func (sh *GoShell) Listen() {
 	if !buf.Scan() {
 		os.Exit(0)
 	}
-	str := buf.Text()
 
+	str := buf.Text()
 	commands := strings.Split(str, " ")
 
 	switch commands[0] {
@@ -68,12 +69,30 @@ func (sh *GoShell) Listen() {
 		} else {
 			cd("")
 		}
+	case "ps":
+		writeString(sh.w, ps(), "\n")
+
+	case "kill":
+		if len(commands) == 2 {
+			pid, err := strconv.Atoi(commands[1])
+			if err != nil {
+				log.Println(err)
+
+				return
+			}
+
+			kill(pid)
+		}
 
 	case "ls":
 		writeString(sh.w, ls(pwd()))
 
 	case "nc":
-		nc(sh.r)
+		if len(commands) == 3 {
+			nc(sh.r, commands[1], commands[2])
+		} else {
+			log.Println("nc: wrong number of arguments")
+		}
 
 	case "echo":
 		echo(sh.w, commands)
@@ -111,6 +130,7 @@ func ls(path string) string {
 	dirs, err := os.ReadDir(path)
 	if err != nil {
 		log.Println(err)
+
 		return ""
 	}
 
@@ -128,7 +148,6 @@ func username() string {
 }
 
 func echo(w io.Writer, strs []string) {
-
 	for i, v := range strs {
 		if len(v) > 2 && v[0] == '$' {
 			strs[i] = os.Getenv(v[1:])
@@ -141,12 +160,14 @@ func echo(w io.Writer, strs []string) {
 
 // return current path
 func pwd() string {
-	if pwd, err := os.Getwd(); err != nil {
+	dir, err := os.Getwd()
+	if err != nil {
 		log.Println(err)
+
 		return ""
-	} else {
-		return pwd
 	}
+
+	return dir
 }
 
 // write string to writer
@@ -154,15 +175,73 @@ func writeString(w io.Writer, str ...string) {
 	io.WriteString(w, strings.Join(str, " "))
 }
 
-// -u udp, default tcp
-// hostname port
-func nc(r io.Reader) {
-
-	conn, err := net.Dial("tcp", "127.0.0.1:80")
+func ps() string {
+	// тут лежат открытые процессы
+	proc, err := os.Open("/proc")
 	if err != nil {
 		log.Println(err)
+
+		return ""
+	}
+
+	// получаем информацию только о процессах
+	// это имена директорий начинающиеся с номера процесса
+	dirs, err := proc.Readdirnames(-1)
+	if err != nil {
+		log.Println(err)
+
+		return ""
+	}
+
+	str := "PID\tTTY\tCMD\n"
+
+	for _, v := range dirs {
+		if v[0] < '0' || v[0] > '9' {
+			continue
+		}
+
+		str += v + "\t"
+
+		tty, _ := os.Readlink(fmt.Sprintf("/proc/%s/fd/0", v))
+		str += tty + "\t"
+
+		cmdline, _ := os.ReadFile(fmt.Sprintf("/proc/%s/cmdline", v))
+		str += string(cmdline)
+		str += "\n"
+	}
+
+	return str
+}
+
+func kill(pid int) {
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		log.Println(err)
+
 		return
 	}
 
-	io.WriteString(conn, "bla bla")
+	if err = proc.Kill(); err != nil {
+		log.Println(err)
+
+		return
+	}
+
+	return
+}
+
+// -u udp, default tcp
+// hostname port
+func nc(r io.Reader, host, port string) {
+	conn, err := net.Dial("tcp", host+":"+port)
+	if err != nil {
+		log.Println(err)
+
+		return
+	}
+
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		io.WriteString(conn, scanner.Text()+"\n")
+	}
 }

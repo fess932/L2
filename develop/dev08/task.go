@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -21,15 +22,12 @@ import (
 Программа должна проходить все тесты. Код должен проходить проверки go vet и golint.
 */
 
-// слушать команды
-//
-
 // os.Input
 // os.Output
+// better: https://pkg.go.dev/github.com/nsf/termbox-go#Event
 
 func main() {
 	sh := NewShell(os.Stdin, os.Stdout)
-
 	sh.Greeteings()
 	for {
 		sh.Listen()
@@ -66,8 +64,13 @@ func (sh *GoShell) Listen() {
 		sh.pwd()
 	case "cd":
 		if len(commands) == 2 {
-			sh.cd(commands[1])
+			cd(commands[1])
+		} else {
+			cd("")
 		}
+	case "ls":
+		writeString(sh.w, ls(pwd()))
+
 	case "nc":
 		nc(sh.r)
 
@@ -84,20 +87,6 @@ func (sh *GoShell) pwd() {
 	io.WriteString(sh.w, pwd()+"\n")
 }
 
-func (sh *GoShell) cd(path string) {
-	switch path {
-	case "":
-		log.Println("to home dir")
-	default:
-		log.Println("to path", path)
-	}
-
-	// .. up
-	// ./ relative
-	// /../../../ absolute
-	// . current
-}
-
 func (sh *GoShell) Greeteings() {
 	writeString(sh.w, fmt.Sprintf("Welcome %s!\n", username()))
 }
@@ -108,6 +97,41 @@ func (sh *GoShell) line() {
 }
 
 // ############################################################### //
+
+func cd(path string) {
+	if path == "" {
+		path = os.Getenv("HOME")
+	}
+
+	path, err := filepath.Abs(path)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	log.Println("cd to path:", path)
+	os.Setenv("PWD", path)
+	// .. up
+	// ./ relative
+	// /../../../ absolute
+	// . current
+}
+
+func ls(path string) string {
+	dirs, err := os.ReadDir(path)
+	if err != nil {
+		log.Println(err)
+		return ""
+	}
+
+	str := ""
+
+	for _, v := range dirs {
+		str += v.Name() + "\n"
+	}
+
+	return str
+}
 
 func username() string {
 	return os.Getenv("USER")

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -86,13 +85,6 @@ func (sh *GoShell) Listen() {
 
 	case "ls":
 		writeString(sh.w, ls(pwd()))
-
-	case "nc":
-		if len(commands) == 3 {
-			nc(sh.r, commands[1], commands[2])
-		} else {
-			log.Println("nc: wrong number of arguments")
-		}
 
 	case "echo":
 		echo(sh.w, commands)
@@ -228,20 +220,4 @@ func kill(pid int) {
 	}
 
 	return
-}
-
-// -u udp, default tcp
-// hostname port
-func nc(r io.Reader, host, port string) {
-	conn, err := net.Dial("tcp", host+":"+port)
-	if err != nil {
-		log.Println(err)
-
-		return
-	}
-
-	scanner := bufio.NewScanner(r)
-	for scanner.Scan() {
-		io.WriteString(conn, scanner.Text()+"\n")
-	}
 }

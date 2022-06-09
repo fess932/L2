@@ -20,7 +20,6 @@ func main() {
 	if *udp {
 		network = "udp"
 	}
-	log.Println(network)
 
 	if len(flag.Args()) == 2 {
 		nc(os.Stdin, network, flag.Args()[0], flag.Args()[1])
@@ -36,11 +35,28 @@ func nc(r io.Reader, network, host, port string) {
 
 		return
 	}
+	defer conn.Close()
 
-	scanner := bufio.NewScanner(r)
-	for scanner.Scan() {
-		if _, err = io.WriteString(conn, scanner.Text()+"\n"); err != nil {
-			log.Println(err)
+	// read from stdin, write to connection
+	go func() {
+		scan := bufio.NewScanner(r)
+		for scan.Scan() {
+			io.WriteString(conn, scan.Text()+"\n")
 		}
-	}
+	}()
+
+	// listen to sercve
+	ch := make(chan struct{})
+	// read from connection, write to stdout
+	go func() {
+		scan := bufio.NewScanner(conn)
+		for scan.Scan() {
+			io.WriteString(os.Stdout, scan.Text())
+		}
+		ch <- struct{}{}
+	}()
+
+	<-ch
+
+	log.Println("nc: connection closed")
 }

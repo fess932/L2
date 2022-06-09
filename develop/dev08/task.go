@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -67,23 +68,35 @@ type Command struct {
 	w io.Writer
 }
 
-func (sh *GoShell) parseCommands(str string, r io.Reader, w io.Writer) (cmds []func()) {
+func (sh *GoShell) parseCommands(str string, out io.Writer) (cmds []func()) {
+	str = strings.TrimSpace(str)
 	cs := strings.Split(str, "|")
 
 	// pipe magic
 	// cmd1 write to out1, out1 as in1 to cmd2, cmd2 write to stdout
 
-	var tmp []string
+	var (
+		tmp []string
+		buf *bytes.Buffer
+	)
+
 	for i, v := range cs {
+		v = strings.TrimSpace(v)
 		tmp = strings.Split(v, " ")
 		cmd := Command{Name: tmp[0], Args: tmp[1:]}
 
-		if i == 0 {
-			cmd.w = w
+		if buf != nil {
+			cmd.r = buf
+		} else {
+			cmd.r = sh.r
 		}
 
-		if i == len(cs)-1 {
-			cmd.r = r
+		buf = &bytes.Buffer{}
+		cmd.w = buf
+
+		// out in last command in pipeline
+		if len(cs)-1 == i {
+			cmd.w = out
 		}
 
 		if cmdr, ok := sh.commandTable[cmd.Name]; ok {
@@ -112,15 +125,11 @@ func (sh *GoShell) Input() {
 		return
 	}
 
-	cmds := sh.parseCommands(str, sh.r, sh.w)
+	cmds := sh.parseCommands(str, sh.w)
 
-	if len(cmds) > 1 {
-		log.Println("OOPS, TODO implement pipes")
-
-		return
+	for _, cmd := range cmds {
+		cmd()
 	}
-
-	cmds[0]()
 }
 
 func greeteings(w io.Writer) {
@@ -265,21 +274,39 @@ func ps() string {
 	}
 
 	str := "PID\tTTY\tCMD\n"
+	ln := ""
+
+	var (
+		tty     string
+		cmdline []byte
+	)
 
 	for _, v := range dirs {
 		if v[0] < '0' || v[0] > '9' {
 			continue
 		}
 
-		str += v + "\t"
+		ln = v + "\t"
 
-		tty, _ := os.Readlink(fmt.Sprintf("/proc/%s/fd/0", v))
-		str += tty + "\t"
+		tty, err = os.Readlink(fmt.Sprintf("/proc/%s/fd/0", v))
+		if err != nil {
+			continue
+		}
 
-		cmdline, _ := os.ReadFile(fmt.Sprintf("/proc/%s/cmdline", v))
-		str += string(cmdline)
-		str += "\n"
+		ln += tty + "\t"
+
+		cmdline, err = os.ReadFile(fmt.Sprintf("/proc/%s/cmdline", v))
+		if err != nil {
+			continue
+		}
+
+		ln += string(cmdline)
+		str += ln + "\n"
 	}
+
+	str = strings.ReplaceAll(str, "\x00", " ")
+
+	os.WriteFile("wtf.txt", []byte(str), 0644)
 
 	return str
 }
@@ -346,8 +373,6 @@ func Fork(cmd Command) func() {
 	return func() {
 		ecmd := exec.Command(cmd.Name, cmd.Args...) //nolint:gosec
 
-		log.Println("CMD ARGS", cmd, cmd.Args)
-
 		ecmd.Stdout = cmd.w
 		ecmd.Stderr = cmd.w
 		ecmd.Stdin = cmd.r
@@ -358,7 +383,5 @@ func Fork(cmd Command) func() {
 
 			return
 		}
-
-		log.Println(ecmd.Process.Pid)
 	}
 }

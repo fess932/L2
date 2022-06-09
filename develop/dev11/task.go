@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"l2/develop/dev11/configs"
 	"l2/develop/dev11/errors"
 	"l2/develop/dev11/pkg"
 	"log"
@@ -45,11 +46,13 @@ GET /events_for_month
 */
 
 func main() {
-	cal := pkg.NewCalendarHttpDelivery()
-
-	r := NewRouter()
-
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
+	config := configs.NewConfig()
+
+	cal := pkg.NewCalendar()
+	cd := pkg.NewCalendarHTTPDelivery(cal)
+	r := NewRouter()
 
 	logMiddleware := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -58,25 +61,33 @@ func main() {
 			log.Printf("[%s][%s] %q %v\n", r.Method, r.RemoteAddr, r.URL.String(), time.Since(t))
 		})
 	}
+
 	r.Use(logMiddleware)
 
-	r.Get("/events_for_day", cal.GetEventForDay)
+	r.Get("/events_for_day", cd.GetEventForDay)
 	r.Get("/events_for_week", nil)
 	r.Get("/events_for_month", nil)
 
-	r.Post("/create_event", nil)
+	r.Post("/create_event", cd.CreateEvent)
 	r.Post("/update_event", nil)
 	r.Post("/delete_event", nil)
 
-	http.ListenAndServe(":8080", r)
+	log.Println("server listening at", config.Addr)
+	log.Println(http.ListenAndServe(config.Addr, r))
 }
 
+func NewRouter() *GRouter {
+	return &GRouter{
+		routes: make(map[string]route),
+	}
+}
+
+// GRouter is a simple router implementation.
 type GRouter struct {
 	handler     http.Handler
 	middlewares []func(http.Handler) http.Handler
 	routes      map[string]route
 }
-
 type route struct {
 	get  func(http.ResponseWriter, *http.Request)
 	post func(http.ResponseWriter, *http.Request)
@@ -92,8 +103,8 @@ func (gr *GRouter) Use(middlewares ...func(http.Handler) http.Handler) {
 
 	gr.middlewares = append(gr.middlewares, middlewares...)
 }
-
 func (gr *GRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// init handler at first request
 	if gr.handler == nil {
 		gr.handler = http.HandlerFunc(gr.routeHTTP)
 		for _, v := range gr.middlewares {
@@ -103,7 +114,6 @@ func (gr *GRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	gr.handler.ServeHTTP(w, r)
 }
-
 func (gr *GRouter) routeHTTP(w http.ResponseWriter, r *http.Request) {
 	if _, ok := gr.routes[r.URL.Path]; !ok {
 		errors.JSONError(w, http.StatusNotFound, errors.ErrNotFound)
@@ -131,55 +141,13 @@ func (gr *GRouter) routeHTTP(w http.ResponseWriter, r *http.Request) {
 		fmt.Errorf("%s, %w", r.Method, errors.ErrMethodNotAllowed),
 	)
 }
-
-func NewRouter() *GRouter {
-	return &GRouter{
-		routes: make(map[string]route),
-	}
-}
-
 func (gr *GRouter) Get(pattern string, handler func(http.ResponseWriter, *http.Request)) {
 	var rt = gr.routes[pattern]
 	rt.get = handler
 	gr.routes[pattern] = rt
 }
-
 func (gr *GRouter) Post(pattern string, handler func(http.ResponseWriter, *http.Request)) {
 	var rt = gr.routes[pattern]
 	rt.post = handler
 	gr.routes[pattern] = rt
 }
-
-//
-//func newRouter() {
-//
-//}
-//
-//func router() {
-//
-//}
-//
-//func router() {
-//
-//	mux := http.NewServeMux()
-//	mux.Handle("/", http.FileServer(http.Dir("static")))
-//
-//	c := &CalendarServce{}
-//	mux.Handle("/create_event", c)
-//
-//	http.HandleFunc("/", mux.ServeHTTP)
-//
-//	//POST /create_event
-//	//POST /update_event
-//	//POST/delete_event
-//	//GET /events_for_day
-//	//GET /events_for_week
-//	//GET /events_for_month
-//}
-//
-//type CalendarServce struct {
-//}
-//
-//func (c *CalendarServce) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-//
-//}

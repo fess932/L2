@@ -2,15 +2,26 @@ package pkg
 
 import (
 	"net/http"
+	"time"
 )
 
-func NewCalendarHttpDelivery() *CalendarHttpDelivery {
-	return &CalendarHttpDelivery{}
+type ICalendar interface {
+	AddEvent(Event) error
+	GetEventsForDate(from time.Time, to time.Time) ([]Event, error)
 }
 
-type CalendarHttpDelivery struct {
+func NewCalendarHTTPDelivery(calendar ICalendar) *CalendarHTTPDelivery {
+	return &CalendarHTTPDelivery{calendar}
 }
 
-func (c *CalendarHttpDelivery) GetEventForDay(w http.ResponseWriter, r *http.Request) {
+type CalendarHTTPDelivery struct {
+	calendar ICalendar
+}
+
+func (c *CalendarHTTPDelivery) GetEventForDay(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("get events_for_day"))
+}
+
+func (c *CalendarHTTPDelivery) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("get events_for_day"))
 }

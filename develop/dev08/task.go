@@ -6,10 +6,8 @@ import (
 	"io"
 	"log"
 	"os"
-	"os/exec"
-	"strconv"
 	"strings"
-	"syscall"
+	"time"
 )
 
 /*
@@ -32,12 +30,19 @@ func main() {
 	sh.Greeteings()
 
 	for {
-		sh.Listen()
+		sh.Input()
 	}
 }
 
 func NewShell(r io.Reader, w io.Writer) *GoShell {
-	return &GoShell{r, w}
+	return &GoShell{
+		r, w,
+		map[string]InitCommand{
+			"cd":  CD,
+			"pwd": PWD,
+			"ls":  LS,
+		},
+	}
 }
 
 // 1 Greeteings
@@ -47,27 +52,49 @@ func NewShell(r io.Reader, w io.Writer) *GoShell {
 type GoShell struct {
 	r io.Reader
 	w io.Writer
+
+	commandTable map[string]InitCommand
 }
 
 type Command struct {
 	Name string
 	Args []string
+
+	r io.Reader
+	w io.Writer
 }
 
-func parseCommands(str string) (cmds []Command) {
+func (sh *GoShell) parseCommands(str string, r io.Reader, w io.Writer) (cmds []func()) {
 	cs := strings.Split(str, "|")
 
 	var tmp []string
-	for _, v := range cs {
+	for i, v := range cs {
 		tmp = strings.Split(v, " ")
-		cmd := Command{tmp[0], tmp[1:]}
-		cmds = append(cmds, cmd)
+		cmd := Command{Name: tmp[0], Args: tmp[1:]}
+
+		if i == 0 {
+			cmd.w = w
+		}
+
+		if i == len(cs)-1 {
+			cmd.r = r
+		}
+
+		if cmdr, ok := sh.commandTable[cmd.Name]; ok {
+			cmds = append(cmds, cmdr(cmd))
+
+			continue
+		}
+
+		log.Println("command not found:", cmd.Name)
+
+		return nil
 	}
 
 	return cmds
 }
 
-func (sh *GoShell) Listen() {
+func (sh *GoShell) Input() {
 	sh.line()
 
 	// read from r
@@ -77,91 +104,96 @@ func (sh *GoShell) Listen() {
 	}
 
 	str := buf.Text()
-
-	parseCommands(str)
-
-	commandsStrings := strings.Split(str, "|")
-
-	for i, v := range commands {
-		commands[i] = strings.Split(str, " ")
-	}
-	if len(commands) == 1 {
-		commands = strings.Split(str, " ")
+	if len(str) == 0 {
+		return
 	}
 
-	commands := strings.Split(str, " ")
+	cmds := sh.parseCommands(str, sh.r, sh.w)
 
-	switch commands[0] {
-	case "pwd":
-		writeString(sh.w, pwd(), "\n")
+	if len(cmds) > 1 {
+		log.Println("OOPS, TODO implement pipes")
 
-	case "cd":
-		if len(commands) == 2 {
-			cd(commands[1])
-		} else {
-			cd("")
-		}
-	case "ps":
-		writeString(sh.w, ps(), "\n")
-
-	case "kill":
-		if len(commands) == 2 {
-			pid, err := strconv.Atoi(commands[1])
-			if err != nil {
-				log.Println(err)
-
-				return
-			}
-
-			kill(pid)
-		}
-
-	case "ls":
-		writeString(sh.w, ls(pwd()))
-
-	case "echo":
-		echo(sh.w, commands)
-
-	case "exit":
-		os.Exit(0)
-
-	case "exec":
-		if len(commands) < 2 {
-			log.Println("exec: missing operand")
-
-			return
-		}
-
-		binary, err := exec.LookPath(commands[1])
-		if err != nil {
-			log.Println(err)
-
-			return
-		}
-
-		args := append([]string{commands[1]}, commands[2:]...)
-
-		if err = syscall.Exec(binary, args, os.Environ()); err != nil {
-			log.Println("exec error:", err)
-		}
-
-	default:
-		cmd := exec.Command(commands[0], commands[1:]...) //nolint:gosec
-
-		log.Println("CMD ARGS", cmd, cmd.Args)
-		cmd.Stdout = sh.w
-		cmd.Stderr = sh.w
-		cmd.Stdin = sh.r
-		cmd.Env = os.Environ()
-
-		if err := cmd.Run(); err != nil {
-			log.Println("cmd run err:", err)
-
-			return
-		}
-
-		log.Println(cmd.Process.Pid)
+		return
 	}
+
+	cmds[0]()
+
+	//switch cmd.Name {
+	//case "pwd":
+	//	writeString(sh.w, pwd(), "\n")
+	//
+	//case "cd":
+	//	if len(cmd.Args) > 0 {
+	//		cd(cmd.Args[0])
+	//	} else {
+	//		cd("")
+	//	}
+	//
+	//case "ps":
+	//	writeString(sh.w, ps(), "\n")
+	//
+	//case "kill":
+	//	if len(cmd.Args) == 0 {
+	//		log.Println("wrong kill command")
+	//		return
+	//	}
+	//
+	//	pid, err := strconv.Atoi(cmd.Args[0])
+	//	if err != nil {
+	//		log.Println(err)
+	//
+	//		return
+	//	}
+	//
+	//	kill(pid)
+	//
+	//case "ls":
+	//	writeString(sh.w, ls(pwd()))
+	//
+	//case "echo":
+	//	echo(sh.w, cmd.Args)
+	//
+	//case "exit":
+	//	os.Exit(0)
+	//
+	//case "exec":
+	//	if len(cmd.Args) == 0 {
+	//		log.Println("exec: missing operand")
+	//
+	//		return
+	//	}
+	//
+	//	binary, err := exec.LookPath(cmd.Name)
+	//	if err != nil {
+	//		log.Println(err)
+	//
+	//		return
+	//	}
+	//
+	//	args := append([]string{cmd.Name}, cmd.Args...)
+	//
+	//	if err = syscall.Exec(binary, args, os.Environ()); err != nil {
+	//		log.Println("exec error:", err)
+	//	}
+	//
+	//default:
+	//	ecmd := exec.Command(cmd.Name, cmd.Args...) //nolint:gosec
+	//
+	//	log.Println("CMD ARGS", cmd, cmd.Args)
+	//
+	//	ecmd.Stdout = sh.w
+	//	ecmd.Stderr = sh.w
+	//	ecmd.Stdin = sh.r
+	//	ecmd.Env = os.Environ()
+	//
+	//	if err := ecmd.Run(); err != nil {
+	//		log.Println("cmd run err:", err)
+	//
+	//		return
+	//	}
+	//
+	//	log.Println(ecmd.Process.Pid)
+	//}
 }
 
 func (sh *GoShell) Greeteings() {
@@ -175,6 +207,19 @@ func (sh *GoShell) line() {
 
 // ############################################################### //
 
+type InitCommand func(Command) func()
+
+func CD(cmd Command) func() {
+	return func() {
+		if len(cmd.Args) == 0 {
+			log.Println("cd: missing operand")
+
+			return
+		}
+
+		cd(cmd.Args[0])
+	}
+}
 func cd(path string) {
 	if path == "" || path == "~" {
 		path = os.Getenv("HOME")
@@ -185,18 +230,41 @@ func cd(path string) {
 	}
 }
 
-func ls(path string) string {
-	dirs, err := os.ReadDir(path)
-	if err != nil {
-		log.Println(err)
+func LS(cmd Command) func() {
+	return func() {
+		log.Println("args", cmd.Args)
 
-		return ""
+		if len(cmd.Args) == 0 {
+			cmd.Args = append(cmd.Args, ".")
+		}
+
+		writeString(cmd.w, ls(cmd.Args...))
 	}
-
+}
+func ls(paths ...string) string {
 	str := ""
 
-	for _, v := range dirs {
-		str += v.Name() + "\n"
+	for i, v := range paths {
+		dirEnties, err := os.ReadDir(v)
+		if err != nil {
+			str += err.Error() + "\n"
+
+			continue
+		}
+
+		var info os.FileInfo
+		for _, entry := range dirEnties {
+			info, err = entry.Info()
+			if err != nil {
+				continue
+			}
+
+			str += fmt.Sprintf("%s  %s  %s\n", info.Mode(), info.ModTime().Format(time.Stamp), info.Name())
+		}
+
+		if len(paths) > i {
+			str += "\n"
+		}
 	}
 
 	return str
@@ -217,7 +285,13 @@ func echo(w io.Writer, strs []string) {
 	writeString(w, strs...)
 }
 
-// return current path
+// PWD return current path
+func PWD(cmd Command) func() {
+	return func() {
+		writeString(cmd.w, pwd())
+	}
+}
+
 func pwd() string {
 	dir, err := os.Getwd()
 	if err != nil {

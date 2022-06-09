@@ -6,8 +6,10 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 /*
@@ -28,6 +30,7 @@ import (
 func main() {
 	sh := NewShell(os.Stdin, os.Stdout)
 	sh.Greeteings()
+
 	for {
 		sh.Listen()
 	}
@@ -46,6 +49,24 @@ type GoShell struct {
 	w io.Writer
 }
 
+type Command struct {
+	Name string
+	Args []string
+}
+
+func parseCommands(str string) (cmds []Command) {
+	cs := strings.Split(str, "|")
+
+	var tmp []string
+	for _, v := range cs {
+		tmp = strings.Split(v, " ")
+		cmd := Command{tmp[0], tmp[1:]}
+		cmds = append(cmds, cmd)
+	}
+
+	return cmds
+}
+
 func (sh *GoShell) Listen() {
 	sh.line()
 
@@ -56,6 +77,18 @@ func (sh *GoShell) Listen() {
 	}
 
 	str := buf.Text()
+
+	parseCommands(str)
+
+	commandsStrings := strings.Split(str, "|")
+
+	for i, v := range commands {
+		commands[i] = strings.Split(str, " ")
+	}
+	if len(commands) == 1 {
+		commands = strings.Split(str, " ")
+	}
+
 	commands := strings.Split(str, " ")
 
 	switch commands[0] {
@@ -92,8 +125,42 @@ func (sh *GoShell) Listen() {
 	case "exit":
 		os.Exit(0)
 
+	case "exec":
+		if len(commands) < 2 {
+			log.Println("exec: missing operand")
+
+			return
+		}
+
+		binary, err := exec.LookPath(commands[1])
+		if err != nil {
+			log.Println(err)
+
+			return
+		}
+
+		args := append([]string{commands[1]}, commands[2:]...)
+
+		if err = syscall.Exec(binary, args, os.Environ()); err != nil {
+			log.Println("exec error:", err)
+		}
+
 	default:
-		writeString(sh.w, fmt.Sprintf("Unknown command [%s]\n", str))
+		cmd := exec.Command(commands[0], commands[1:]...) //nolint:gosec
+
+		log.Println("CMD ARGS", cmd, cmd.Args)
+		cmd.Stdout = sh.w
+		cmd.Stderr = sh.w
+		cmd.Stdin = sh.r
+		cmd.Env = os.Environ()
+
+		if err := cmd.Run(); err != nil {
+			log.Println("cmd run err:", err)
+
+			return
+		}
+
+		log.Println(cmd.Process.Pid)
 	}
 }
 

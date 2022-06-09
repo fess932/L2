@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"l2/develop/dev11/errors"
 	"log"
 	"net/http"
+	"time"
 )
 
 /*
@@ -44,20 +46,41 @@ GET /events_for_month
 func main() {
 	r := NewRouter()
 
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello, world!"))
-	})
+	logMiddleware := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			log.Println("Middleware")
+
+			t := time.Now()
+			next.ServeHTTP(w, r)
+			log.Println("request completed in", time.Since(t))
+		})
+	}
+
+	r.Use(logMiddleware)
+
+	r.Get("/events_for_day", nil)
+	r.Get("/events_for_week", nil)
+	r.Get("/events_for_month", nil)
+	r.Post("/create_event", nil)
+	r.Post("/update_event", nil)
+	r.Post("/delete_event", nil)
 
 	http.ListenAndServe(":8080", r)
 }
 
 type GRouter struct {
-	routes map[string]route
+	middlewares []func(http.Handler) http.Handler
+	routes      map[string]route
 }
 
 type route struct {
 	get  func(http.ResponseWriter, *http.Request)
 	post func(http.ResponseWriter, *http.Request)
+}
+
+// Use add middleware to router
+func (gr *GRouter) Use(middlewares ...func(http.Handler) http.Handler) {
+	gr.middlewares = append(gr.middlewares, middlewares...)
 }
 
 func (gr *GRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -67,7 +90,29 @@ func (gr *GRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if _, ok := gr.routes[r.URL.Path]; !ok {
 		errors.JSONError(w, http.StatusNotFound, errors.ErrNotFound)
+
+		return
 	}
+
+	if r.Method == "GET" {
+		if gr.routes[r.URL.Path].get != nil {
+			gr.routes[r.URL.Path].get(w, r)
+
+			return
+		}
+	}
+
+	if r.Method == "POST" {
+		if gr.routes[r.URL.Path].post != nil {
+			gr.routes[r.URL.Path].post(w, r)
+
+			return
+		}
+	}
+
+	errors.JSONError(w, http.StatusMethodNotAllowed,
+		fmt.Errorf("%s, %w", r.Method, errors.ErrMethodNotAllowed),
+	)
 }
 
 func NewRouter() *GRouter {

@@ -7,14 +7,15 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("not found")
+	ErrNotFound         = errors.New("not found")
+	ErrMethodNotAllowed = errors.New("method not allowed")
 )
 
 type JSON map[string]interface{}
 
 func JSONError(w http.ResponseWriter, code int, err error) {
 	b, _ := json.Marshal(JSON{
-		"error": err,
+		"error": err.Error(),
 	})
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

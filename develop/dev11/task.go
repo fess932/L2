@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"l2/develop/dev11/errors"
+	"l2/develop/dev11/pkg"
 	"log"
 	"net/http"
 	"time"
@@ -44,23 +45,25 @@ GET /events_for_month
 */
 
 func main() {
+	cal := pkg.NewCalendarHttpDelivery()
+
 	r := NewRouter()
+
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	logMiddleware := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			log.Println("Middleware")
-
 			t := time.Now()
 			next.ServeHTTP(w, r)
-			log.Println("request completed in", time.Since(t))
+			log.Printf("[%s][%s] %q %v\n", r.Method, r.RemoteAddr, r.URL.String(), time.Since(t))
 		})
 	}
-
 	r.Use(logMiddleware)
 
-	r.Get("/events_for_day", nil)
+	r.Get("/events_for_day", cal.GetEventForDay)
 	r.Get("/events_for_week", nil)
 	r.Get("/events_for_month", nil)
+
 	r.Post("/create_event", nil)
 	r.Post("/update_event", nil)
 	r.Post("/delete_event", nil)
@@ -69,6 +72,7 @@ func main() {
 }
 
 type GRouter struct {
+	handler     http.Handler
 	middlewares []func(http.Handler) http.Handler
 	routes      map[string]route
 }
@@ -80,14 +84,27 @@ type route struct {
 
 // Use add middleware to router
 func (gr *GRouter) Use(middlewares ...func(http.Handler) http.Handler) {
+	if gr.middlewares == nil {
+		gr.middlewares = middlewares
+
+		return
+	}
+
 	gr.middlewares = append(gr.middlewares, middlewares...)
 }
 
 func (gr *GRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Println(r.URL.Path)
-	log.Println(r.Method)
-	log.Println(r.RequestURI)
+	if gr.handler == nil {
+		gr.handler = http.HandlerFunc(gr.routeHTTP)
+		for _, v := range gr.middlewares {
+			gr.handler = v(gr.handler)
+		}
+	}
 
+	gr.handler.ServeHTTP(w, r)
+}
+
+func (gr *GRouter) routeHTTP(w http.ResponseWriter, r *http.Request) {
 	if _, ok := gr.routes[r.URL.Path]; !ok {
 		errors.JSONError(w, http.StatusNotFound, errors.ErrNotFound)
 

@@ -27,17 +27,29 @@ import (
 */
 
 func main() {
-	flag.Uint("A", 0, "print uint lines of leading context")
-	flag.Uint("B", 0, "print uint lines of trailing context")
-	flag.Uint("C", 0, "print uint lines of output context")
+	opt := SearchOptions{}
+	flag.BoolVar(&opt.Count, "c", false, "only show a count of matching lines")
+	flag.BoolVar(&opt.IgnoreCase, "i", false, "ignore case distinctions in patterns and data")
+	flag.BoolVar(&opt.Invert, "v", false, "only show non-matching lines")
+	flag.BoolVar(&opt.Fixed, "F", false, "PATTERNS are strings")
+	flag.BoolVar(&opt.LineNumber, "n", false, "show line numbers in front of matching lines")
 
-	flag.Bool("c", false, "only show a count of matching lines")
-	flag.Bool("i", false, "ignore case distinctions in patterns and data")
-	flag.Bool("v", false, "only show non-matching lines")
-	flag.Bool("F", false, "PATTERNS are strings")
-	flag.Bool("n", false, "show line numbers in front of matching lines")
+	A := flag.Uint("A", 0, "print uint lines of After context")
+	B := flag.Uint("B", 0, "print uint lines of Before context")
+	C := flag.Uint("C", 0, "print uint lines of output context")
 
 	flag.Parse()
+
+	if *A > 0 {
+		opt.After = *A
+	}
+	if *B > 0 {
+		opt.Before = *B
+	}
+	if *C > 0 {
+		opt.After = *C
+		opt.Before = *C
+	}
 
 	r := strings.NewReader(`
 hello world
@@ -46,44 +58,79 @@ hello
 friends
 hello
 `)
-	log.Println(grep(r, os.Stdout, "hello"))
-	log.Println(grep(r, os.Stdout, "hello", WithCount()))
+	log.Println(grep(r, os.Stdout, "hello", opt))
 }
 
-type Option struct {
+type SearchOptions struct {
+	After, Before uint
+	Count         bool
+	Invert        bool
+	IgnoreCase    bool
+	Fixed         bool
+	LineNumber    bool
 }
 
-func WithCount() Option {
-	return Option{}
-}
+/*
+ищем все совпадения regexp или string.Contains
+скользящие интервалы
 
-func grep(r io.Reader, w io.Writer, pattern string, options ...Option) error {
-	scanner := bufio.NewScanner(r)
+храним последние Before+1+After строки
+
+Если если совпадение
+*/
+
+func grep(r io.Reader, w io.Writer, pattern string, options SearchOptions) error {
+	var (
+		err        error
+		searchFunc func(string) bool
+		scanner    = bufio.NewScanner(r)
+	)
+
+	if !options.Fixed {
+		searchFunc, err = searchRegexp(pattern)
+		if err != nil {
+			return fmt.Errorf("invalid pattern: %v", err)
+		}
+	} else {
+		searchFunc = searchString(pattern)
+	}
 
 	var (
 		n, count int
 	)
 
-	reg, err := regexp.CompilePOSIX(pattern)
-	if err != nil {
-		return fmt.Errorf("invalid pattern: %v", err)
-	}
-
 	for scanner.Scan() {
 		n++
 
-		line := reg.Find(scanner.Bytes())
-		if line != nil {
-			count++
-			fmt.Fprintf(w, "%d:%s, count: %d\n", n, line, count)
+		if !searchFunc(scanner.Text()) {
+			continue
 		}
+
+		count++
+
+		if options.LineNumber {
+			fmt.Fprintf(w, "%d: ", n)
+		}
+		fmt.Fprintln(w, scanner.Text())
 	}
 
 	return nil
 }
 
-type SearchResult struct {
-	Entries []Entry
+func searchRegexp(pattern string) (s func(string) bool, err error) {
+	reg, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil, err
+	}
+
+	return func(data string) bool {
+		return reg.Match([]byte(data))
+	}, nil
+}
+func searchString(pattern string) func(string) bool {
+	return func(data string) bool {
+		return strings.Contains(data, pattern)
+	}
 }
 
 type Entry struct {

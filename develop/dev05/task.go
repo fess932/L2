@@ -2,9 +2,12 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"io"
+	"log"
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -24,6 +27,17 @@ import (
 */
 
 func main() {
+	flag.Uint("A", 0, "print uint lines of leading context")
+	flag.Uint("B", 0, "print uint lines of trailing context")
+	flag.Uint("C", 0, "print uint lines of output context")
+
+	flag.Bool("c", false, "only show a count of matching lines")
+	flag.Bool("i", false, "ignore case distinctions in patterns and data")
+	flag.Bool("v", false, "only show non-matching lines")
+	flag.Bool("F", false, "PATTERNS are strings")
+	flag.Bool("n", false, "show line numbers in front of matching lines")
+
+	flag.Parse()
 
 	r := strings.NewReader(`
 hello world
@@ -32,22 +46,47 @@ hello
 friends
 hello
 `)
-	grep(r, os.Stdout, "hello")
+	log.Println(grep(r, os.Stdout, "hello"))
+	log.Println(grep(r, os.Stdout, "hello", WithCount()))
 }
 
 type Option struct {
 }
 
-func grep(r io.Reader, w io.Writer, pattern string, options ...Option) {
+func WithCount() Option {
+	return Option{}
+}
+
+func grep(r io.Reader, w io.Writer, pattern string, options ...Option) error {
 	scanner := bufio.NewScanner(r)
 
-	var n int
+	var (
+		n, count int
+	)
+
+	reg, err := regexp.CompilePOSIX(pattern)
+	if err != nil {
+		return fmt.Errorf("invalid pattern: %v", err)
+	}
+
 	for scanner.Scan() {
 		n++
 
-		line := scanner.Text()
-		if strings.Contains(line, pattern) {
-			fmt.Fprintf(w, "%d:%s\n", n, line)
+		line := reg.Find(scanner.Bytes())
+		if line != nil {
+			count++
+			fmt.Fprintf(w, "%d:%s, count: %d\n", n, line, count)
 		}
 	}
+
+	return nil
+}
+
+type SearchResult struct {
+	Entries []Entry
+}
+
+type Entry struct {
+	LineNum int
+	Line    string
 }

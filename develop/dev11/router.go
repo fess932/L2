@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"l2/develop/dev11/errors"
+	"l2/develop/dev11/pkg"
 	"net/http"
 )
 
@@ -46,7 +46,7 @@ func (gr *GRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 func (gr *GRouter) routeHTTP(w http.ResponseWriter, r *http.Request) {
 	if _, ok := gr.routes[r.URL.Path]; !ok {
-		errors.JSONError(w, http.StatusNotFound, errors.ErrNotFound)
+		pkg.JSONError(w, http.StatusNotFound, pkg.ErrNotFound)
 
 		return
 	}
@@ -67,8 +67,8 @@ func (gr *GRouter) routeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	errors.JSONError(w, http.StatusMethodNotAllowed,
-		fmt.Errorf("%s, %w", r.Method, errors.ErrMethodNotAllowed),
+	pkg.JSONError(w, http.StatusMethodNotAllowed,
+		fmt.Errorf("%s, %w", r.Method, pkg.ErrMethodNotAllowed),
 	)
 }
 func (gr *GRouter) Get(pattern string, handler func(http.ResponseWriter, *http.Request)) {

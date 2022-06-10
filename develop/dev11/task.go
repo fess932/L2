@@ -65,8 +65,8 @@ func main() {
 	r.Use(logMiddleware)
 
 	r.Get("/events_for_day", cd.GetEventForDay)
-	r.Get("/events_for_week", nil)
-	r.Get("/events_for_month", nil)
+	r.Get("/events_for_week", cd.GetEventForWeek)
+	r.Get("/events_for_month", cd.GetEventForMonth)
 
 	r.Post("/create_event", cd.CreateEvent)
 	r.Post("/update_event", nil)

@@ -12,7 +12,7 @@ type Calendar struct {
 	repo IRepo
 }
 
-func (c *Calendar) AddEvent(e Event) error {
+func (c *Calendar) AddEvent(e *Event) error {
 	return c.repo.AddEvent(e)
 }
 

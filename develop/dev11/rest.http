@@ -1,0 +1,14 @@
+### add event
+POST localhost:8080/create_event
+Content-Type: application/x-www-form-urlencoded
+
+date=2020-01-01&title=Забрать посылку из wb
+
+### get event for day
+GET localhost:8080/events_for_day?date=2020-01-01
+
+### get event for week
+GET localhost:8080/events_for_week?date=2020-01-01
+
+### get event for month
+GET localhost:8080/events_for_month?date=2020-01-01

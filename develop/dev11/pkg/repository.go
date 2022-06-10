@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"github.com/google/uuid"
 	"sync"
 	"time"
 )
@@ -8,7 +9,7 @@ import (
 var _ IRepo = &CalRepo{}
 
 type IRepo interface {
-	AddEvent(e Event) error
+	AddEvent(e *Event) error
 
 	GetEventByID(id string) (Event, error)
 	GetEventsForDateRange(from time.Time, to time.Time) ([]Event, error)
@@ -23,11 +24,12 @@ type CalRepo struct {
 	Events []Event
 }
 
-func (c *CalRepo) AddEvent(e Event) error {
+func (c *CalRepo) AddEvent(e *Event) error {
 	c.Lock()
 	defer c.Unlock()
 
-	c.Events = append(c.Events, e)
+	e.ID = uuid.NewString()
+	c.Events = append(c.Events, *e)
 
 	return nil
 }

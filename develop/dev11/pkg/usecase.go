@@ -1,19 +1,21 @@
 package pkg
 
-import "time"
+import (
+	"time"
+)
 
-func NewCalendar() *Calendar {
-	return &Calendar{}
+func NewCalendar(repo IRepo) *Calendar {
+	return &Calendar{repo}
 }
 
 type Calendar struct {
-	Events []Event
+	repo IRepo
 }
 
 func (c *Calendar) AddEvent(e Event) error {
-	c.Events = append(c.Events, e)
+	return c.repo.AddEvent(e)
 }
 
-func (c *Calendar) GetEventsForDate(from time.Time, to time.Time) ([]Event, error) {
-
+func (c *Calendar) GetEventsForDateRange(from time.Time, to time.Time) ([]Event, error) {
+	return c.repo.GetEventsForDateRange(from, to)
 }

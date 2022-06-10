@@ -7,7 +7,7 @@ import (
 
 type ICalendar interface {
 	AddEvent(Event) error
-	GetEventsForDate(from time.Time, to time.Time) ([]Event, error)
+	GetEventsForDateRange(from time.Time, to time.Time) ([]Event, error)
 }
 
 func NewCalendarHTTPDelivery(calendar ICalendar) *CalendarHTTPDelivery {

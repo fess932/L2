@@ -1,14 +1,49 @@
-### add event
+### day events
+# @name add event today
 POST localhost:8080/create_event
 Content-Type: application/x-www-form-urlencoded
 
 date=2020-01-01&title=Забрать посылку из wb
 
+> {%
+client.test("create_event", function () {
+    client.assert(response.status===201, "OK")
+})
+client.global.set("event_id", response.body.result.id)
+%}
+
 ### get event for day
 GET localhost:8080/events_for_day?date=2020-01-01
+
+### update event today by id
+POST localhost:8080/update_event
+Content-Type: application/x-www-form-urlencoded
+
+date=2020-01-01&title=Забрать посылку на почте&id={{event_id}}
+
+### delete event today by id
+POST localhost:8080/delete_event
+Content-Type: application/x-www-form-urlencoded
+
+id={{event_id}}
+
+### week events
+# @name add event next day
+POST localhost:8080/create_event
+Content-Type: application/x-www-form-urlencoded
+
+date=2020-01-02&title=Забрать посылку из wb
 
 ### get event for week
 GET localhost:8080/events_for_week?date=2020-01-01
 
+### month events
+
 ### get event for month
 GET localhost:8080/events_for_month?date=2020-01-01
+
+### add event next week
+POST localhost:8080/create_event
+Content-Type: application/x-www-form-urlencoded
+
+date=2020-01-08&title=Забрать посылку из wb

@@ -10,8 +10,9 @@ var _ IRepo = &CalRepo{}
 
 type IRepo interface {
 	AddEvent(e *Event) error
+	UpdateEvent(e Event) (Event, error)
+	DeleteEventByID(id string) error
 
-	GetEventByID(id string) (Event, error)
 	GetEventsForDateRange(from time.Time, to time.Time) ([]Event, error)
 }
 
@@ -34,9 +35,33 @@ func (c *CalRepo) AddEvent(e *Event) error {
 	return nil
 }
 
-func (c *CalRepo) GetEventByID(id string) (Event, error) {
-	//TODO implement me
-	panic("implement me")
+func (c *CalRepo) UpdateEvent(e Event) (Event, error) {
+	c.Lock()
+	defer c.Unlock()
+
+	for i, v := range c.Events {
+		if v.ID == e.ID {
+			c.Events[i] = e
+
+			return e, nil
+		}
+	}
+
+	return Event{}, ErrNotFound
+}
+
+func (c *CalRepo) DeleteEventByID(id string) error {
+	c.Lock()
+	defer c.Unlock()
+
+	for i, v := range c.Events {
+		if v.ID == id {
+			c.Events = append(c.Events[:i], c.Events[i+1:]...)
+			return nil
+		}
+	}
+
+	return ErrNotFound
 }
 
 func (c *CalRepo) GetEventsForDateRange(from time.Time, to time.Time) ([]Event, error) {
@@ -45,8 +70,9 @@ func (c *CalRepo) GetEventsForDateRange(from time.Time, to time.Time) ([]Event, 
 
 	var e []Event
 
+	// [...)
 	for _, v := range c.Events {
-		if v.Date.After(from) && v.Date.Before(to) {
+		if (v.Date.After(from) || v.Date == from) && v.Date.Before(to) {
 			e = append(e, v)
 		}
 	}

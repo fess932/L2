@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -8,6 +9,8 @@ import (
 
 type ICalendar interface {
 	AddEvent(*Event) error
+	UpdateEvent(Event) (Event, error)
+	DeleteEvent(id string) error
 	GetEventsForDateRange(from time.Time, to time.Time) ([]Event, error)
 }
 
@@ -21,27 +24,66 @@ type CalendarHTTPDelivery struct {
 
 // CreateEvent for date
 func (c *CalendarHTTPDelivery) CreateEvent(w http.ResponseWriter, r *http.Request) {
-	e := Event{
-		Title: r.FormValue("title"),
-		Date:  time.Time{},
-	}
-
-	date, err := parseDate(r.FormValue("date"))
+	event, err := parseEvent(r)
 	if err != nil {
 		JSONError(w, http.StatusBadRequest, err)
 
 		return
 	}
 
-	e.Date = date
-
-	if err = c.calendar.AddEvent(&e); err != nil {
+	if err = c.calendar.AddEvent(&event); err != nil {
 		JSONError(w, http.StatusInternalServerError, err)
 
 		return
 	}
 
-	JSONResponse(w, http.StatusCreated, e)
+	JSONResponse(w, http.StatusCreated, event)
+}
+
+// DeleteEvent by id
+func (c *CalendarHTTPDelivery) DeleteEvent(w http.ResponseWriter, r *http.Request) {
+	id := r.FormValue("id")
+
+	err := c.calendar.DeleteEvent(id)
+	if errors.Is(err, ErrNotFound) {
+		JSONError(w, http.StatusBadRequest, fmt.Errorf("id: %s, %w", id, err))
+
+		return
+	}
+
+	if err != nil {
+		JSONError(w, http.StatusServiceUnavailable, err)
+
+		return
+	}
+
+	JSONResponse(w, http.StatusOK, id+" deleted")
+}
+
+// UpdateEvent ...
+func (c *CalendarHTTPDelivery) UpdateEvent(w http.ResponseWriter, r *http.Request) {
+	event, err := parseEvent(r)
+	if err != nil {
+		JSONError(w, http.StatusBadRequest, err)
+
+		return
+	}
+
+	uEvent, err := c.calendar.UpdateEvent(event)
+
+	if errors.Is(err, ErrNotFound) {
+		JSONError(w, http.StatusBadRequest, fmt.Errorf("id: %v, %w", event.ID, err))
+
+		return
+	}
+
+	if err != nil {
+		JSONError(w, http.StatusServiceUnavailable, err)
+
+		return
+	}
+
+	JSONResponse(w, http.StatusOK, uEvent)
 }
 
 func (c *CalendarHTTPDelivery) GetEventForDay(w http.ResponseWriter, r *http.Request) {
@@ -53,9 +95,8 @@ func (c *CalendarHTTPDelivery) GetEventForWeek(w http.ResponseWriter, r *http.Re
 func (c *CalendarHTTPDelivery) GetEventForMonth(w http.ResponseWriter, r *http.Request) {
 	c.getEvensForRange(w, r, Month)
 }
-
 func (c *CalendarHTTPDelivery) getEvensForRange(w http.ResponseWriter, r *http.Request, rang int) {
-	from, to, err := parseRange(r.FormValue("date"), rang)
+	from, to, err := parseDateRange(r.FormValue("date"), rang)
 	if err != nil {
 		JSONError(w, http.StatusBadRequest, err)
 
@@ -70,6 +111,23 @@ func (c *CalendarHTTPDelivery) getEvensForRange(w http.ResponseWriter, r *http.R
 	}
 
 	JSONResponse(w, http.StatusOK, events)
+}
+
+func parseEvent(r *http.Request) (Event, error) {
+	e := Event{
+		ID:    r.FormValue("id"),
+		Title: r.FormValue("title"),
+		Date:  time.Time{},
+	}
+
+	date, err := parseDate(r.FormValue("date"))
+	if err != nil {
+		return Event{}, err
+	}
+
+	e.Date = date
+
+	return e, nil
 }
 
 func parseDate(input string) (time.Time, error) {
@@ -87,7 +145,7 @@ const (
 	Month
 )
 
-func parseRange(input string, rang int) (from, to time.Time, err error) {
+func parseDateRange(input string, rang int) (from, to time.Time, err error) {
 	date, err := parseDate(input)
 	if err != nil {
 		return time.Time{}, time.Time{}, fmt.Errorf("cant parse date: %w", err)

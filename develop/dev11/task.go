@@ -69,8 +69,8 @@ func main() {
 	r.Get("/events_for_month", cd.GetEventForMonth)
 
 	r.Post("/create_event", cd.CreateEvent)
-	r.Post("/update_event", nil)
-	r.Post("/delete_event", nil)
+	r.Post("/update_event", cd.UpdateEvent)
+	r.Post("/delete_event", cd.DeleteEvent)
 
 	log.Println("server listening at", config.Addr)
 	log.Println(http.ListenAndServe(config.Addr, r))

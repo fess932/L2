@@ -43,9 +43,11 @@ func main() {
 	if *A > 0 {
 		opt.After = *A
 	}
+
 	if *B > 0 {
 		opt.Before = *B
 	}
+
 	if *C > 0 {
 		opt.After = *C
 		opt.Before = *C
@@ -58,7 +60,9 @@ hello
 friends
 hello
 `)
-	log.Println(grep(r, os.Stdout, "hello", opt))
+	if err := grep(r, os.Stdout, "hello", opt); err != nil {
+		log.Println(err)
+	}
 }
 
 type SearchOptions struct {
@@ -77,63 +81,184 @@ type SearchOptions struct {
 храним последние Before+1+After строки
 
 Если если совпадение
+
+хранить before строк
+если match печатать before + match
+потом читать следующие after строки и писать их
+если найдено совпадение читать следующие after строки и писать их
+елси не найдено совпадение то
+
 */
 
 func grep(r io.Reader, w io.Writer, pattern string, options SearchOptions) error {
 	var (
-		err        error
-		searchFunc func(string) bool
-		scanner    = bufio.NewScanner(r)
+		searchFunc, err = newSearchFunc(pattern, options)
+
+		scanner = bufio.NewScanner(r)
+		before  = NewBefore(options.Before)
+
+		e             Entry
+		linenn, count int
+
+		printFunc = func(e Entry) {
+			if options.Count {
+				return
+			}
+			if options.LineNumber {
+				fmt.Fprintf(w, "%d: ", e.LineNum)
+			}
+			fmt.Fprintln(w, e.Text)
+		}
 	)
 
-	if !options.Fixed {
-		searchFunc, err = searchRegexp(pattern)
-		if err != nil {
-			return fmt.Errorf("invalid pattern: %v", err)
-		}
-	} else {
-		searchFunc = searchString(pattern)
+	if err != nil {
+		return fmt.Errorf("newSearchFunc: %w", err)
 	}
 
-	var (
-		n, count int
-	)
-
 	for scanner.Scan() {
-		n++
+		linenn++
 
-		if !searchFunc(scanner.Text()) {
+		e = Entry{
+			LineNum: linenn,
+			Text:    scanner.Text(),
+		}
+
+		if !searchFunc(e.Text) {
+			before.Push(e)
+
 			continue
 		}
 
 		count++
 
-		if options.LineNumber {
-			fmt.Fprintf(w, "%d: ", n)
+		before.Drain(printFunc)
+		printFunc(e)
+
+		// print next "After" lines, if line match, counter i reset to 0
+		for i := uint(0); i < options.After; i++ {
+			if !scanner.Scan() {
+				break
+			}
+
+			linenn++
+
+			e = Entry{
+				LineNum: linenn,
+				Text:    scanner.Text(),
+			}
+
+			if !searchFunc(e.Text) {
+				printFunc(e)
+
+				continue
+			}
+
+			i = 0
+			count++
+
+			printFunc(e)
 		}
-		fmt.Fprintln(w, scanner.Text())
+	}
+
+	if options.Count {
+		fmt.Fprintln(w, count)
 	}
 
 	return nil
 }
 
-func searchRegexp(pattern string) (s func(string) bool, err error) {
+type Entry struct {
+	LineNum int
+	Text    string
+}
+
+func newSearchFunc(pattern string, opt SearchOptions) (sf func(string) bool, err error) {
+	if !opt.Fixed {
+		sf, err = searchRegexp(pattern, opt)
+		if err != nil {
+			return nil, fmt.Errorf("invalid pattern: %v", err)
+		}
+	} else {
+		sf = searchString(pattern, opt)
+	}
+
+	return
+}
+func searchRegexp(pattern string, opt SearchOptions) (s func(string) bool, err error) {
+	if opt.IgnoreCase {
+		pattern = strings.ToLower(pattern) // todo: mb regexp bugged
+	}
+
 	reg, err := regexp.Compile(pattern)
 	if err != nil {
 		return nil, err
 	}
 
 	return func(data string) bool {
-		return reg.Match([]byte(data))
+		if opt.IgnoreCase {
+			data = strings.ToLower(data)
+		}
+
+		return reg.Match([]byte(data)) != opt.Invert
 	}, nil
 }
-func searchString(pattern string) func(string) bool {
+func searchString(pattern string, opt SearchOptions) func(string) bool {
+	if opt.IgnoreCase {
+		pattern = strings.ToLower(pattern)
+	}
+
 	return func(data string) bool {
-		return strings.Contains(data, pattern)
+		if opt.IgnoreCase {
+			data = strings.ToLower(data)
+		}
+
+		return strings.Contains(data, pattern) != opt.Invert
 	}
 }
 
-type Entry struct {
-	LineNum int
-	Line    string
+type Before struct {
+	length int
+	data   []Entry
+}
+
+func NewBefore(width uint) *Before {
+	return &Before{
+		length: 0,
+		data:   make([]Entry, width),
+	}
+}
+func (b *Before) Push(e Entry) {
+	if len(b.data) == 0 {
+		return
+	}
+
+	if len(b.data) == 1 {
+		b.data[0] = e
+		b.length = 1
+
+		return
+	}
+
+	// если еще нет лимита, просто записываем e в конец
+	if b.length < len(b.data) {
+		b.data[b.length] = e
+		b.length++
+
+		return
+	}
+
+	for i := 0; i < b.length-1; i++ {
+		b.data[i] = b.data[i+1]
+	}
+
+	b.data[b.length-1] = e
+}
+
+// Drain sends all entries to fn and reset length
+func (b *Before) Drain(fn func(e Entry)) {
+	for i := 0; i < b.length; i++ {
+		fn(b.data[i])
+	}
+
+	b.length = 0
 }

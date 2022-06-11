@@ -75,19 +75,11 @@ type SearchOptions struct {
 }
 
 /*
-ищем все совпадения regexp или string.Contains
-скользящие интервалы
-
-храним последние Before+1+After строки
-
-Если если совпадение
-
 хранить before строк
 если match печатать before + match
 потом читать следующие after строки и писать их
 если найдено совпадение читать следующие after строки и писать их
-елси не найдено совпадение то
-
+если не найдено совпадение то начинать следюущую итерацию сканирования
 */
 
 func grep(r io.Reader, w io.Writer, pattern string, options SearchOptions) error {

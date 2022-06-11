@@ -53,14 +53,12 @@ func main() {
 		opt.Before = *C
 	}
 
-	r := strings.NewReader(`
-hello world
-world
-hello
-friends
-hello
-`)
-	if err := grep(r, os.Stdout, "hello", opt); err != nil {
+	if flag.NArg() < 1 {
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	if err := grep(os.Stdin, os.Stdout, flag.Arg(0), opt); err != nil {
 		log.Println(err)
 	}
 }

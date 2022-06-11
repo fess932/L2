@@ -71,6 +71,7 @@ func parseFields(str string) ([]int, error) {
 
 		log.Println("strFrom:", strFrom, "strTo:", strTo)
 		// TODO: как расчитать верхнюю границу если заранее неизвестно количество полей?
+		// просто писать все поля после strFrom!
 
 		if strFrom != "" {
 			from, err = strconv.Atoi(strFrom)

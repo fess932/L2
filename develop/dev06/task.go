@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -46,19 +47,55 @@ func main() {
 // 1,2 > 1,2
 func parseFields(str string) ([]int, error) {
 	raw := strings.Split(str, ",")
-	fields := make([]int, len(raw))
+	fields := make([]int, 0, len(raw))
 
-	var err error
-	for i, field := range raw {
-		fields[i], err = strconv.Atoi(field)
-		if err != nil {
-			return nil, err
+	var (
+		err            error
+		strFrom, strTo string
+		from, to       int
+		ok             bool
+	)
+
+	for _, field := range raw {
+		strFrom, strTo, ok = strings.Cut(field, "-")
+		if !ok {
+			from, err = strconv.Atoi(field)
+			if err != nil {
+				return nil, fmt.Errorf("invalid field: %w", err)
+			}
+
+			fields = append(fields, from)
+
+			continue
 		}
 
-		// absolute field number
-		if fields[i] < 0 {
-			fields[i] = -fields[i]
+		log.Println("strFrom:", strFrom, "strTo:", strTo)
+		// TODO: как расчитать верхнюю границу если заранее неизвестно количество полей?
+
+		if strFrom != "" {
+			from, err = strconv.Atoi(strFrom)
+			if err != nil {
+				return nil, fmt.Errorf("invalid field: %w", err)
+			}
 		}
+
+		if from == 0 {
+			from = 1
+		}
+
+		if strTo == "" {
+			to = len(raw)
+		} else {
+			to, err = strconv.Atoi(strTo)
+			if err != nil {
+				return nil, fmt.Errorf("invalid field: %w", err)
+			}
+		}
+
+		for ; from <= to; from++ {
+			fields = append(fields, from)
+		}
+		log.Println("")
 	}
 
 	return fields, nil

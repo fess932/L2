@@ -69,10 +69,6 @@ func parseFields(str string) ([]int, error) {
 			continue
 		}
 
-		log.Println("strFrom:", strFrom, "strTo:", strTo)
-		// TODO: как расчитать верхнюю границу если заранее неизвестно количество полей?
-		// просто писать все поля после strFrom!
-
 		if strFrom != "" {
 			from, err = strconv.Atoi(strFrom)
 			if err != nil {
@@ -106,13 +102,20 @@ func cut(r io.Reader, w io.Writer, fields []int, delimiter string, separated boo
 	s := bufio.NewScanner(r)
 	for s.Scan() {
 		columns := strings.Split(s.Text(), delimiter)
-		for _, field := range fields {
+		if separated && len(columns) < 2 {
+			continue
+		}
+
+		for i, field := range fields {
 			if field > len(columns) {
-				log.Println("Fields must be less than columns") // todo: remove this line
 				continue
 			}
 
+			fmt.Fprint(w, columns[field-1])
+			if i < len(fields)-1 {
+				fmt.Fprint(w, delimiter)
+			}
 		}
-
+		fmt.Fprintln(w)
 	}
 }

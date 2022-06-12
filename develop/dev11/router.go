@@ -25,12 +25,6 @@ type route struct {
 
 // Use add middleware to router
 func (gr *GRouter) Use(middlewares ...func(http.Handler) http.Handler) {
-	if gr.middlewares == nil {
-		gr.middlewares = middlewares
-
-		return
-	}
-
 	gr.middlewares = append(gr.middlewares, middlewares...)
 }
 func (gr *GRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {

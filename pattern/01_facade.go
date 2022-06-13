@@ -13,12 +13,9 @@ import "net/http"
 
 // Facade - предоставляет простой интерфейс для сложной системы.
 // Пример на вводе строки в поисковую строку браузера.
-func FacadeSearch() {
-	// обработка ввода текста
-	searchString := typing()
-
+func FacadeSearch(query string) {
 	// создание http запроса
-	req := createHttpRequest(searchString)
+	req := createHttpRequest(query)
 
 	// отправка запроса на сервер
 	resp := sendHttpRequest(req)
@@ -28,14 +25,6 @@ func FacadeSearch() {
 
 	// вывод ответа на экран
 	view.Show()
-}
-
-func mouseClick(target string) {
-
-}
-
-func typing() string {
-	return ""
 }
 
 func createHttpRequest(query string) *http.Request {

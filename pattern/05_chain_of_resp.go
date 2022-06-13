@@ -24,16 +24,21 @@ func chainUsage() {
 	// получение данных из кеша
 
 	// init chain
-	var chain Chain
-	chain = TokenMiddleware(chain)
-	chain = AccessMiddleware(chain)
+
+	chain := func(ctx context.Context) error {
+		fmt.Println("клиентский код")
+
+		return nil
+	}
+
 	chain = CacheMiddelware(chain)
+	chain = AccessMiddleware(chain)
+	chain = TokenMiddleware(chain)
 
 	ctx := context.WithValue(context.Background(), "token", token)
 	ctx = context.WithValue(ctx, "dataID", dataID)
-
 	if err := chain(ctx); err != nil {
-		log.Println(fmt.Errorf("wrong access: %w", err))
+		log.Println(fmt.Errorf("wrong request: %w", err))
 	}
 }
 
@@ -42,6 +47,10 @@ type Chain func(ctx context.Context) error
 func TokenMiddleware(next func(ctx context.Context) error) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
 		log.Println("token middleware")
+		_, ok := ctx.Value("token").(string)
+		if !ok {
+			return fmt.Errorf("wrong token")
+		}
 
 		return next(ctx)
 	}
@@ -59,6 +68,11 @@ func CacheMiddelware(next func(ctx context.Context) error) func(ctx context.Cont
 	return func(ctx context.Context) error {
 		log.Println("cache middleware")
 
-		return next(ctx)
+		if dataid, ok := ctx.Value("dataID").(string); ok {
+			fmt.Println("Данные из кеша:", dataid)
+			return nil
+		}
+
+		return nil
 	}
 }
